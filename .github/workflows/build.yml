@@ -15,7 +15,7 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Choisir Xcode
         run: |
@@ -26,13 +26,15 @@ jobs:
           done
           if [ -n "$pick" ]; then sudo xcode-select -s "$pick"; fi
           xcodebuild -version
-          xcodebuild -showsdks | grep -E "iphoneos|appletvos" || true
+          echo "::notice title=Xcode::$(xcodebuild -version | tr '\n' ' ') | $(xcodebuild -showsdks | grep -oE '(iphoneos|appletvos)[0-9.]+' | tr '\n' ' ')"
 
       - name: Compiler pour iPhone
         run: |
           set -o pipefail
           xcodebuild -project IptvApple.xcodeproj -target IptvApple -configuration Debug \
             -sdk iphoneos CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ios.log | grep -E "error:|warning:|BUILD" || true
+          grep -E "error:" ios.log | sort -u | head -30 | sed 's/^/::error title=iPhone::/' || true
+          grep -E "warning:" ios.log | grep -v "appintents" | sort -u | head -20 | sed 's/^/::warning title=iPhone::/' || true
           grep -q "BUILD SUCCEEDED" ios.log
 
       - name: Compiler pour Apple TV
@@ -40,12 +42,6 @@ jobs:
           set -o pipefail
           xcodebuild -project IptvApple.xcodeproj -target IptvAppleTV -configuration Debug \
             -sdk appletvos CODE_SIGNING_ALLOWED=NO build 2>&1 | tee tv.log | grep -E "error:|warning:|BUILD" || true
+          grep -E "error:" tv.log | sort -u | head -30 | sed 's/^/::error title=AppleTV::/' || true
+          grep -E "warning:" tv.log | grep -v "appintents" | sort -u | head -20 | sed 's/^/::warning title=AppleTV::/' || true
           grep -q "BUILD SUCCEEDED" tv.log
-
-      - name: Journaux
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: "*.log"
-          if-no-files-found: ignore
