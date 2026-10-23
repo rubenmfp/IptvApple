@@ -1,0 +1,51 @@
+# Vérifie que l'appli se compile (iPhone et Apple TV), sans signature.
+# Utilise Xcode 15.2 quand il est disponible : c'est la version du Mac de l'utilisateur (macOS Ventura).
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Choisir Xcode
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          pick=""
+          for v in 15.2 15.1 15.0.1 15.0 15.3 15.4; do
+            if [ -d "/Applications/Xcode_$v.app" ]; then pick="/Applications/Xcode_$v.app"; break; fi
+          done
+          if [ -n "$pick" ]; then sudo xcode-select -s "$pick"; fi
+          xcodebuild -version
+          xcodebuild -showsdks | grep -E "iphoneos|appletvos" || true
+
+      - name: Compiler pour iPhone
+        run: |
+          set -o pipefail
+          xcodebuild -project IptvApple.xcodeproj -target IptvApple -configuration Debug \
+            -sdk iphoneos CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ios.log | grep -E "error:|warning:|BUILD" || true
+          grep -q "BUILD SUCCEEDED" ios.log
+
+      - name: Compiler pour Apple TV
+        run: |
+          set -o pipefail
+          xcodebuild -project IptvApple.xcodeproj -target IptvAppleTV -configuration Debug \
+            -sdk appletvos CODE_SIGNING_ALLOWED=NO build 2>&1 | tee tv.log | grep -E "error:|warning:|BUILD" || true
+          grep -q "BUILD SUCCEEDED" tv.log
+
+      - name: Journaux
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: "*.log"
+          if-no-files-found: ignore
