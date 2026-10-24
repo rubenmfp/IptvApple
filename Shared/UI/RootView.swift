@@ -33,13 +33,15 @@ struct MainTabs: View {
             LiveView()
                 .tabItem { Label("Direct", systemImage: "dot.radiowaves.left.and.right") }
                 .tag(4)
-            SettingsView()
-                #if os(tvOS)
+            #if os(tvOS)
+            NavigationStack { SettingsView() }
                 .tabItem { Image(systemName: "gearshape") }
-                #else
-                .tabItem { Label("Plus", systemImage: "ellipsis") }
-                #endif
                 .tag(5)
+            #else
+            PlusView()
+                .tabItem { Label("Plus", systemImage: "ellipsis") }
+                .tag(5)
+            #endif
         }
     }
 }

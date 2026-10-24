@@ -8,6 +8,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         Self.mask
     }
+
+    /// Téléchargements terminés pendant que l'appli était fermée : iOS la réveille pour les finir.
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        MainActor.assumeIsolated { DownloadManager.shared.backgroundCompletion = completionHandler }
+    }
 }
 
 enum Orientation {

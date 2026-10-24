@@ -160,6 +160,12 @@ struct ItemSheet: View {
             } else {
                 Button { startFilm(at: 0) } label: { Label("Lecture", systemImage: "play.fill").bold() }
             }
+            #if os(iOS)
+            if !isSeries, let v = chosen {
+                DownloadButton(entry: DLEntry(key: "vod:\(v.id)", kind: "vod", id: v.id, ext: v.ext, title: item.name,
+                                              subtitle: v.q == "?" ? "" : v.q, poster: item.poster), big: true)
+            }
+            #endif
             Button {
                 Store.toggleFav(item.key)
                 fav = Store.isFav(item.key)
@@ -180,10 +186,19 @@ struct ItemSheet: View {
         #endif
     }
 
+    #if os(iOS)
+    private func episodeDownload(_ e: Episode) -> DLEntry {
+        DLEntry(key: e.key, kind: "series", id: e.id, ext: e.ext, title: "S\(e.season) É\(e.num) · \(e.title)",
+                subtitle: item.name, poster: e.image ?? item.poster, seriesId: item.id, seriesName: item.name,
+                season: e.season, num: e.num)
+    }
+    #endif
+
     private func startFilm(at ms: Int) {
         guard let v = chosen else { return }
         play = PlayRequest(title: item.name, key: "vod:\(v.id)", kind: "vod",
-                           urls: model.fileURLs(kind: "vod", id: v.id, ext: info?.ext.isEmpty == false && v.id == item.id ? info!.ext : v.ext),
+                           urls: model.playURLs(kind: "vod", id: v.id, ext: info?.ext.isEmpty == false && v.id == item.id ? info!.ext : v.ext,
+                                                key: "vod:\(v.id)"),
                            startMs: ms)
     }
 
@@ -250,8 +265,24 @@ struct ItemSheet: View {
                 .scrollClipDisabled()
                 #else
                 LazyVStack(alignment: .leading, spacing: 12) {
+                    #if os(iOS)
+                    Button {
+                        eps.forEach { DownloadManager.shared.add(episodeDownload($0)) }
+                    } label: {
+                        Label(i.seasons.count > 1 ? "Télécharger la saison \(season ?? 1)" : "Télécharger tous les épisodes",
+                              systemImage: "arrow.down.circle")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.bordered)
+                    #endif
                     ForEach(eps, id: \.id) { e in
+                        #if os(iOS)
+                        EpisodeRow(episode: e, fallback: item.poster, download: episodeDownload(e)) {
+                            play = model.episodeRequest(series: item, info: i, episode: e)
+                        }
+                        #else
                         EpisodeRow(episode: e, fallback: item.poster) { play = model.episodeRequest(series: item, info: i, episode: e) }
+                        #endif
                     }
                 }
                 .padding(.horizontal, Theme.edge)
@@ -309,9 +340,19 @@ private func episodeProgress(_ e: Episode) -> Double? {
 struct EpisodeRow: View {
     let episode: Episode
     let fallback: String?
+    var download: DLEntry? = nil
     let action: () -> Void
 
     var body: some View {
+        HStack(alignment: .center, spacing: 6) {
+            mainButton
+            #if os(iOS)
+            if let d = download { DownloadButton(entry: d) }
+            #endif
+        }
+    }
+
+    private var mainButton: some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 12) {
                 ZStack(alignment: .bottom) {

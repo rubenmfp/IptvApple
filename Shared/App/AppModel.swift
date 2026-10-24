@@ -97,6 +97,7 @@ final class AppModel: ObservableObject {
         account = a
         status = Files.load(AccountStatus.self, from: Files.status)
         phase = .ready
+        configureDownloads()
         Task {
             // démarrage rapide : le catalogue enregistré s'affiche tout de suite, la mise à jour se fait ensuite
             let c = await Task.detached(priority: .userInitiated) { Files.load(Catalog.self, from: Files.catalog) }.value
@@ -155,6 +156,7 @@ final class AppModel: ObservableObject {
             status = st
             Files.save(st, to: Files.status)
             phase = .ready
+            configureDownloads()
             refresh()
             return nil
         } catch {
@@ -219,7 +221,7 @@ final class AppModel: ObservableObject {
     func episodeRequest(series: Item, info: ItemInfo, episode e: Episode, fromStart: Bool = false) -> PlayRequest {
         let pos = fromStart ? 0 : Store.pos(e.key)
         var r = PlayRequest(title: "\(series.name) · S\(e.season) É\(e.num) \(e.title)", key: e.key, kind: "series",
-                            urls: fileURLs(kind: "series", id: e.id, ext: e.ext), startMs: pos > 10_000 ? pos : 0)
+                            urls: playURLs(kind: "series", id: e.id, ext: e.ext, key: e.key), startMs: pos > 10_000 ? pos : 0)
         r.seriesId = series.id
         if let i = info.episodes.firstIndex(of: e), i + 1 < info.episodes.count {
             let n = info.episodes[i + 1]
@@ -238,6 +240,25 @@ final class AppModel: ObservableObject {
         if Store.pos(e.key) > 10_000 { return (e, true) }
         if Store.seen(e.key), i + 1 < info.episodes.count { return (info.episodes[i + 1], false) }
         return (e, false)
+    }
+
+    // ---------- téléchargements (iPhone) ----------
+    private func configureDownloads() {
+        #if os(iOS)
+        DownloadManager.shared.urlsFor = { [weak self] e in
+            self?.fileURLs(kind: e.kind, id: e.id, ext: e.ext) ?? []
+        }
+        DownloadManager.shared.resumeAfterStreaming()
+        #endif
+    }
+
+    /// Adresses de lecture : le fichier téléchargé d'abord (lecture sans connexion), puis le serveur.
+    func playURLs(kind: String, id: Int, ext: String, key: String) -> [URL] {
+        var l: [URL] = []
+        #if os(iOS)
+        if let u = DownloadManager.shared.localURL(key) { l.append(u) }
+        #endif
+        return l + fileURLs(kind: kind, id: id, ext: ext)
     }
 
     // ---------- adresses de lecture ----------

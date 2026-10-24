@@ -318,6 +318,10 @@ struct PlayerView: View {
 
     /// Lance une lecture (au départ, ou pour l'épisode suivant).
     private func startPlayback(_ r: PlayRequest) {
+        #if os(iOS)
+        // lecture en ligne : le téléchargement en cours s'arrête le temps de la lecture (une seule connexion)
+        if r.urls.first?.isFileURL != true { DownloadManager.shared.suspendForStreaming() }
+        #endif
         engine.onStarted = { url in
             if !r.live, !url.pathExtension.isEmpty { Store.setGoodExt(r.kind, url.pathExtension) }
             if r.live {
@@ -357,6 +361,7 @@ struct PlayerView: View {
         UIApplication.shared.isIdleTimerDisabled = false
         #if os(iOS)
         Orientation.release()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { DownloadManager.shared.resumeAfterStreaming() }
         #endif
         onClose()
     }

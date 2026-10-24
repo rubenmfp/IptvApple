@@ -20,7 +20,6 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationStack {
             Form {
                 Section("Compte") {
                     if let s = model.status { Text(s.summary) }
@@ -42,11 +41,10 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Étape 4 : fiche complète, séries et épisodes, favoris. Téléchargements à venir.").foregroundStyle(Theme.dim)
+                    Text("Étape 4 : fiche complète, séries et épisodes, favoris, téléchargements (iPhone).").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")
-        }
         .confirmationDialog("Se déconnecter ? Le catalogue enregistré sera effacé de cet appareil.", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Se déconnecter", role: .destructive) { model.logout() }
             Button("Annuler", role: .cancel) {}

@@ -17,6 +17,7 @@
 		1D9569F3B3390AA3D9C7ACE0 = {isa = PBXBuildFile; fileRef = BCBD276CF82FB70E45A68071 /* Theme.swift */; };
 		1DA6B6915F16A04D0E4D2206 = {isa = PBXBuildFile; fileRef = 5C2546B2A6873006F860335F /* TVVLCKit.xcframework */; };
 		2054B87FF4797FAAA28A08D1 = {isa = PBXBuildFile; fileRef = 96F0B84184345629440640E4 /* PlayerEngine.swift */; };
+		25725CA2D419A2643D66B95B = {isa = PBXBuildFile; fileRef = BB7F0D64EC4B3FD6CCB9DEAF /* DownloadsView.swift */; };
 		270E96BD4ACC87A9181D93A7 = {isa = PBXBuildFile; fileRef = C9F692B28932FB86BC9B79B2 /* PlayerView.swift */; };
 		2CE6113DAA1392166F0EE339 = {isa = PBXBuildFile; fileRef = 830C85F4CA0E986B02AE9B2B /* Xtream.swift */; };
 		2EF0765E4BB722D2A506D725 = {isa = PBXBuildFile; fileRef = EBCB10DBD24ABE6B1E62A7D9 /* LiveView.swift */; };
@@ -26,6 +27,7 @@
 		3DE356EC4C368DF6843C5EEE = {isa = PBXBuildFile; fileRef = B3A3B6DABEBF9688B6461C0D /* BrowseView.swift */; };
 		43B02D82A8F68BAF94D48195 = {isa = PBXBuildFile; fileRef = 1599A0C67162B8F3F6C721B6 /* RemoteImage.swift */; };
 		44F1ED56C0E374AD8F1E9FDD = {isa = PBXBuildFile; fileRef = C9F692B28932FB86BC9B79B2 /* PlayerView.swift */; };
+		4635FAD12D06B356EC803E6B = {isa = PBXBuildFile; fileRef = 93403CEB9EE43F0DF85AFE5C /* Downloads.swift */; };
 		48D7E590A98B4A32F42559EF = {isa = PBXBuildFile; fileRef = 11CFB0D940EDDC54B2C5C697 /* JSONScan.swift */; };
 		4A442188F9919A2EBAB9A8E5 = {isa = PBXBuildFile; fileRef = 1599A0C67162B8F3F6C721B6 /* RemoteImage.swift */; };
 		5E3AEE5AA9DFD465FFDA6949 = {isa = PBXBuildFile; fileRef = D211737BA42E0C52724D0D7B /* Store.swift */; };
@@ -35,7 +37,9 @@
 		8146175EDD5ED757F83BB562 = {isa = PBXBuildFile; fileRef = 00838648B9FFCB9CF30FEFD8 /* Orientation.swift */; };
 		86C95C2FEC167E3266F6939D = {isa = PBXBuildFile; fileRef = C092905B600FDDDF852C33E1 /* Storage.swift */; };
 		88BE50EDD76F5B86FEC0B4FC = {isa = PBXBuildFile; fileRef = 8D645A824BD508C49FB3EF52 /* Regex.swift */; };
+		8FCA85670FF5390816E22770 = {isa = PBXBuildFile; fileRef = 93403CEB9EE43F0DF85AFE5C /* Downloads.swift */; };
 		9CC7C8469BA28748DCFD6696 = {isa = PBXBuildFile; fileRef = B645520D9BD2FD3914711FB2 /* ItemSheet.swift */; };
+		9F33F87719DDBC3402DB6611 = {isa = PBXBuildFile; fileRef = BB7F0D64EC4B3FD6CCB9DEAF /* DownloadsView.swift */; };
 		A17EC93E633D43B5105E3338 = {isa = PBXBuildFile; fileRef = B645520D9BD2FD3914711FB2 /* ItemSheet.swift */; };
 		A1EC3E5B62D7A29CC18DC980 = {isa = PBXBuildFile; fileRef = C49E7E82B4F027632C8DE828 /* Assets.xcassets */; };
 		A331C3858C8146F1E097DB8B = {isa = PBXBuildFile; fileRef = 5C2546B2A6873006F860335F /* TVVLCKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -94,10 +98,12 @@
 		8822A06E4CEB39F67FB2601B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		8CEA6D6C6C64F36E2C768608 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IptvAppleTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8D645A824BD508C49FB3EF52 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Regex.swift; sourceTree = "<group>"; };
+		93403CEB9EE43F0DF85AFE5C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Downloads.swift; sourceTree = "<group>"; };
 		96F0B84184345629440640E4 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerEngine.swift; sourceTree = "<group>"; };
 		9991A562AE8A88EC2FB04066 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		B3A3B6DABEBF9688B6461C0D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseView.swift; sourceTree = "<group>"; };
 		B645520D9BD2FD3914711FB2 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemSheet.swift; sourceTree = "<group>"; };
+		BB7F0D64EC4B3FD6CCB9DEAF = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsView.swift; sourceTree = "<group>"; };
 		BCBD276CF82FB70E45A68071 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		C092905B600FDDDF852C33E1 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Storage.swift; sourceTree = "<group>"; };
 		C49E7E82B4F027632C8DE828 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -197,6 +203,7 @@
 			isa = PBXGroup;
 			children = (
 				CD22A37155FA7EBED7CB2E77 /* AppModel.swift */,
+				93403CEB9EE43F0DF85AFE5C /* Downloads.swift */,
 				00838648B9FFCB9CF30FEFD8 /* Orientation.swift */,
 			);
 			path = App;
@@ -206,6 +213,7 @@
 			isa = PBXGroup;
 			children = (
 				B3A3B6DABEBF9688B6461C0D /* BrowseView.swift */,
+				BB7F0D64EC4B3FD6CCB9DEAF /* DownloadsView.swift */,
 				B645520D9BD2FD3914711FB2 /* ItemSheet.swift */,
 				EBCB10DBD24ABE6B1E62A7D9 /* LiveView.swift */,
 				9991A562AE8A88EC2FB04066 /* LoginView.swift */,
@@ -329,6 +337,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				04645C452E44E5536C3E1905 /* AppModel.swift in Sources */,
+				4635FAD12D06B356EC803E6B /* Downloads.swift in Sources */,
 				8146175EDD5ED757F83BB562 /* Orientation.swift in Sources */,
 				12BF0FF8D2BF4FC855A83970 /* JSONScan.swift in Sources */,
 				733DE72C5F3FC5E674480C4C /* Models.swift in Sources */,
@@ -341,6 +350,7 @@
 				B4252D27875BBC68C2B6345A /* PlayerEngine.swift in Sources */,
 				44F1ED56C0E374AD8F1E9FDD /* PlayerView.swift in Sources */,
 				3DE356EC4C368DF6843C5EEE /* BrowseView.swift in Sources */,
+				25725CA2D419A2643D66B95B /* DownloadsView.swift in Sources */,
 				9CC7C8469BA28748DCFD6696 /* ItemSheet.swift in Sources */,
 				07D44FC8DD1BF2510CB51AAF /* LiveView.swift in Sources */,
 				DFEBB4BFFF24DEAEF1C5E929 /* LoginView.swift in Sources */,
@@ -356,6 +366,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2F9027D0EACC53C00B6DA299 /* AppModel.swift in Sources */,
+				8FCA85670FF5390816E22770 /* Downloads.swift in Sources */,
 				DB264689C49C97E58D060119 /* Orientation.swift in Sources */,
 				48D7E590A98B4A32F42559EF /* JSONScan.swift in Sources */,
 				CEBE78EE27330B9738ADAAC4 /* Models.swift in Sources */,
@@ -368,6 +379,7 @@
 				2054B87FF4797FAAA28A08D1 /* PlayerEngine.swift in Sources */,
 				270E96BD4ACC87A9181D93A7 /* PlayerView.swift in Sources */,
 				15A314A305AD1A02FEB1E11C /* BrowseView.swift in Sources */,
+				9F33F87719DDBC3402DB6611 /* DownloadsView.swift in Sources */,
 				A17EC93E633D43B5105E3338 /* ItemSheet.swift in Sources */,
 				2EF0765E4BB722D2A506D725 /* LiveView.swift in Sources */,
 				0E71252DBC8A86274A315308 /* LoginView.swift in Sources */,
@@ -387,7 +399,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -397,7 +409,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.4;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
@@ -415,7 +427,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -425,7 +437,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.4;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
@@ -442,7 +454,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -457,7 +469,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.4;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -517,7 +529,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -532,7 +544,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.4;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
