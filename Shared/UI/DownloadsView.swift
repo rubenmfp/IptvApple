@@ -57,6 +57,54 @@ struct DownloadButton: View {
     }
 }
 
+/// Action secondaire de la fiche : icône et légende, sur une largeur égale aux autres.
+struct ActionTile: View {
+    let icon: String
+    let text: String
+    var on = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 22)).foregroundStyle(on ? Theme.accent : .white)
+                Text(text).font(.caption2).foregroundStyle(Theme.dim).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressStyle())
+    }
+}
+
+/// Téléchargement sur la fiche, au même format que les autres actions (icône et état en clair).
+struct DownloadTile: View {
+    @ObservedObject private var dl = DownloadManager.shared
+    let entry: DLEntry
+
+    var body: some View {
+        let e = dl.entry(entry.key)
+        let (icon, text): (String, String) = {
+            switch e?.state {
+            case nil: return ("arrow.down.circle", "Télécharger")
+            case .queued?: return ("clock", "En attente")
+            case .downloading?: return ("pause.circle", "\(Int((e?.progress ?? 0) * 100)) %")
+            case .paused?: return ("arrow.down.circle", "En pause")
+            case .done?: return ("checkmark.circle.fill", "Téléchargé")
+            case .failed?: return ("exclamationmark.arrow.circlepath", "Réessayer")
+            }
+        }()
+        ActionTile(icon: icon, text: text, on: e?.state == .done) {
+            switch e?.state {
+            case nil: dl.add(entry)
+            case .downloading?, .queued?: dl.pause(entry.key)
+            case .paused?, .failed?: dl.resume(entry.key)
+            case .done?: break
+            }
+        }
+    }
+}
+
 /// Onglet « Plus » (iPhone) : téléchargements et réglages.
 struct PlusView: View {
     @ObservedObject private var dl = DownloadManager.shared

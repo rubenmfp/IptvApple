@@ -26,6 +26,9 @@ struct ItemSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.tv ? 34 : 22) {
                     header.id("top")
+                    #if os(iOS)
+                    phoneActions
+                    #endif
                     if !isSeries, item.variants.count > 1 { versions }
                     if isSeries { episodesSection }
                     people
@@ -104,7 +107,9 @@ struct ItemSheet: View {
                 .font(Theme.tv ? .callout : .subheadline)
                 if !meta.isEmpty { Text(meta).font(Theme.tv ? .callout : .footnote).foregroundStyle(Theme.dim) }
                 plot
+                #if os(tvOS)
                 playButtons
+                #endif
                 if let e = loadError { Text(e).font(.footnote).foregroundStyle(Theme.dim) }
             }
             Spacer(minLength: 0)
@@ -187,6 +192,64 @@ struct ItemSheet: View {
     }
 
     #if os(iOS)
+    /// iPhone (comme Netflix) : un grand bouton sur toute la largeur, la progression dessous,
+    /// puis les actions secondaires en icônes légendées.
+    private var phoneActions: some View {
+        let target: (Episode, resume: Bool)? = isSeries ? info.flatMap { AppModel.episodeToPlay(seriesId: item.id, info: $0) } : nil
+        let film = isSeries ? nil : vodProgress
+        let pos: (Int, Int)? = isSeries
+            ? target.flatMap { t in let p = Store.pos(t.0.key); return p > 10_000 ? (p, Store.dur(t.0.key)) : nil }
+            : film.map { ($0.pos, $0.dur) }
+        let title: String = {
+            if let t = target { return "\(t.resume ? "Reprendre" : "Lecture") · S\(t.0.season) É\(t.0.num)" }
+            if isSeries { return "Lecture" }
+            return film != nil ? "Reprendre" : "Lecture"
+        }()
+        return VStack(alignment: .leading, spacing: 12) {
+            Button {
+                if isSeries {
+                    if let i = info, let t = target { play = model.episodeRequest(series: item, info: i, episode: t.0) }
+                } else {
+                    startFilm(at: film?.pos ?? 0)
+                }
+            } label: {
+                Label(title, systemImage: "play.fill")
+                    .font(.headline)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .foregroundStyle(.black)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(PressStyle())
+            .disabled(isSeries && target == nil)
+            .opacity(isSeries && target == nil ? 0.5 : 1)
+
+            if let (p, d) = pos, d > 0 {
+                HStack(spacing: 10) {
+                    ProgressView(value: min(1, Double(p) / Double(d))).tint(Theme.accent)
+                    Text("\(fmtTime(p)) sur \(fmtTime(d))").font(.caption).foregroundStyle(Theme.dim).monospacedDigit()
+                }
+            }
+
+            HStack(spacing: 0) {
+                if !isSeries && film != nil {
+                    ActionTile(icon: "backward.end.fill", text: "Depuis le début") { startFilm(at: 0) }
+                }
+                if !isSeries, let v = chosen {
+                    DownloadTile(entry: DLEntry(key: "vod:\(v.id)", kind: "vod", id: v.id, ext: v.ext, title: item.name,
+                                                subtitle: v.q == "?" ? "" : v.q, poster: item.poster))
+                }
+                ActionTile(icon: fav ? "heart.fill" : "heart", text: fav ? "Dans mes favoris" : "Favoris", on: fav) {
+                    Store.toggleFav(item.key)
+                    fav = Store.isFav(item.key)
+                    model.progressChanged()
+                }
+            }
+        }
+        .padding(.horizontal, Theme.edge)
+    }
+
     private func episodeDownload(_ e: Episode) -> DLEntry {
         DLEntry(key: e.key, kind: "series", id: e.id, ext: e.ext, title: "S\(e.season) É\(e.num) · \(e.title)",
                 subtitle: item.name, poster: e.image ?? item.poster, seriesId: item.id, seriesName: item.name,
