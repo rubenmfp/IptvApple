@@ -340,7 +340,9 @@ private func episodeProgress(_ e: Episode) -> Double? {
 struct EpisodeRow: View {
     let episode: Episode
     let fallback: String?
+    #if os(iOS)
     var download: DLEntry? = nil
+    #endif
     let action: () -> Void
 
     var body: some View {
