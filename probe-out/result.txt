@@ -1,40 +1,225 @@
-t
-t/TVVLCKit-binary
-t/TVVLCKit-binary/COPYING.txt
-t/TVVLCKit-binary/NEWS.txt
-t/TVVLCKit-binary/doc
-t/TVVLCKit-binary/TVVLCKit.xcframework
-t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64
-t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator
-t/TVVLCKit-binary/TVVLCKit.xcframework/Info.plist
       "LibraryIdentifier" => "tvos-arm64"
       "LibraryPath" => "TVVLCKit.framework"
       "LibraryIdentifier" => "tvos-arm64_x86_64-simulator"
       "LibraryPath" => "TVVLCKit.framework"
-t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/TVVLCKit: Mach-O 64-bit dynamically linked shared library arm64
-Headers
-Info.plist
-Modules
-PrivateHeaders
-TVVLCKit
-t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/TVVLCKit: Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit dynamically linked shared library x86_64] [arm64]
-t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/TVVLCKit (for architecture x86_64):	Mach-O 64-bit dynamically linked shared library x86_64
-t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/TVVLCKit (for architecture arm64):	Mach-O 64-bit dynamically linked shared library arm64
-Headers
-Info.plist
-Modules
-PrivateHeaders
-TVVLCKit
-_CodeSignature
-HEADERS t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/PrivateHeaders
-VLCCustomDialogProvider.h
-VLCEmbeddedDialogProvider.h
-VLCEventsHandler.h
-VLCFilter+Internal.h
-VLCHelperCode.h
-VLCLibVLCBridging.h
-VLCMediaPlayer+Internal.h
-VLCiOSLegacyDialogProvider.h
-grep: t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/PrivateHeaders/VLCMediaPlayer.h: No such file or directory
-grep: t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/PrivateHeaders/VLCMedia.h: No such file or directory
-grep: t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/PrivateHeaders/VLCTime.h: No such file or directory
+HEADERS t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/Headers
+TVVLCKit.h
+VLCAdjustFilter.h
+VLCAudio.h
+VLCAudioEqualizer.h
+VLCConsoleLogger.h
+VLCDialogProvider.h
+VLCEventsConfiguration.h
+VLCFileLogger.h
+VLCFilter.h
+VLCLibrary.h
+VLCLogMessageFormatter.h
+VLCLogging.h
+VLCMedia.h
+VLCMediaDiscoverer.h
+VLCMediaList.h
+VLCMediaListPlayer.h
+VLCMediaMetaData.h
+VLCMediaPlayer.h
+VLCMediaThumbnailer.h
+VLCTime.h
+vlc
+47:extern NSString *const VLCMediaPlayerStateChanged;
+55:typedef NS_ENUM(NSInteger, VLCMediaPlayerState)
+57:    VLCMediaPlayerStateStopped,        ///< Player has stopped
+58:    VLCMediaPlayerStateOpening,        ///< Stream is opening
+59:    VLCMediaPlayerStateBuffering,      ///< Stream is buffering
+60:    VLCMediaPlayerStateEnded,          ///< Stream has ended
+61:    VLCMediaPlayerStateError,          ///< Player has generated an error
+62:    VLCMediaPlayerStatePlaying,        ///< Stream is playing
+63:    VLCMediaPlayerStatePaused,         ///< Stream is paused
+64:    VLCMediaPlayerStateESAdded         ///< Elementary Stream added
+70:typedef NS_ENUM(unsigned, VLCMediaPlaybackNavigationAction)
+82:typedef NS_ENUM(NSInteger, VLCDeinterlace)
+98:@property (readonly, atomic) double loudnessValue;
+104:@property (readonly, atomic) int64_t date;
+113:extern NSString * VLCMediaPlayerStateToString(VLCMediaPlayerState state);
+124: * \details Discussion The value of aNotification is always an VLCMediaPlayerStateChanged notification. You can retrieve
+127:- (void)mediaPlayerStateChanged:(NSNotification *)aNotification;
+134:- (void)mediaPlayerTimeChanged:(NSNotification *)aNotification;
+142:- (void)mediaPlayerTitleChanged:(NSNotification *)aNotification;
+149:- (void)mediaPlayerChapterChanged:(NSNotification *)aNotification;
+156:- (void)mediaPlayerLoudnessChanged:(NSNotification *)aNotification;
+163:- (void)mediaPlayerSnapshot:(NSNotification *)aNotification;
+169:- (void)mediaPlayerStartedRecording:(VLCMediaPlayer *)player;
+176:- (void)mediaPlayer:(VLCMediaPlayer *)player recordingStoppedAtPath:(NSString *)path;
+189:@property (nonatomic, readonly) VLCLibrary *libraryInstance;
+193:@property (weak, nonatomic, nullable) id<VLCMediaPlayerDelegate> delegate;
+202:- (instancetype)initWithVideoView:(VLCVideoView *)aVideoView;
+208:- (instancetype)initWithVideoLayer:(VLCVideoLayer *)aVideoLayer;
+214:- (instancetype)initWithLibrary:(VLCLibrary *)library;
+220:- (instancetype)initWithOptions:(NSArray *)options;
+227:- (instancetype)initWithLibVLCInstance:(void *)playerInstance andLibrary:(VLCLibrary *)library;
+241:- (void)setVideoView:(VLCVideoView *)aVideoView;
+247:- (void)setVideoLayer:(VLCVideoLayer *)aVideoLayer;
+254:@property (strong, nullable) id drawable; /* The videoView or videoLayer */
+264:@property (NS_NONATOMIC_IOSONLY, nullable) char *videoAspectRatio;
+272:@property (NS_NONATOMIC_IOSONLY, nullable) char *videoCropGeometry;
+283:@property (nonatomic) float scaleFactor;
+295:- (void)saveVideoSnapshotAt:(NSString *)path withWidth:(int)width andHeight:(int)height;
+302:- (void)setDeinterlaceFilter: (nullable NSString *)name;
+310:- (void)setDeinterlace:(VLCDeinterlace)deinterlace withFilter:(NSString *)name;
+315:@property (nonatomic, readonly) VLCAdjustFilter *adjustFilter;
+322:@property (nonatomic) BOOL adjustFilterEnabled __deprecated_msg("Use -[VLCMediaPlayer adjustFilter].enabled instead");
+328:@property (nonatomic) float contrast __deprecated_msg("Use -[VLCMediaPlayer adjustFilter].contrast instead");
+334:@property (nonatomic) float brightness __deprecated_msg("Use -[VLCMediaPlayer adjustFilter].brightness instead");
+340:@property (nonatomic) float hue __deprecated_msg("Use -[VLCMediaPlayer adjustFilter].hue instead");
+346:@property (nonatomic) float saturation __deprecated_msg("Use -[VLCMediaPlayer adjustFilter].saturation instead");
+352:@property (nonatomic) float gamma __deprecated_msg("Use -[VLCMediaPlayer adjustFilter].gamma instead");
+362:@property (nonatomic) float rate;
+368:@property (nonatomic, readonly, weak) VLCAudio * audio;
+375:@property (NS_NONATOMIC_IOSONLY, readonly) CGSize videoSize;
+383:@property (NS_NONATOMIC_IOSONLY, readonly) BOOL hasVideoOut;
+390:@property (NS_NONATOMIC_IOSONLY, readonly) float framesPerSecond __attribute__((deprecated));
+404:@property (NS_NONATOMIC_IOSONLY, strong) VLCTime *time;
+411:@property (nonatomic, readonly, weak) VLCTime *remainingTime;
+423:@property (readwrite) int currentVideoTrackIndex;
+429:@property (NS_NONATOMIC_IOSONLY, readonly, copy) NSArray *videoTrackNames;
+435:@property (NS_NONATOMIC_IOSONLY, readonly, copy) NSArray *videoTrackIndexes;
+441:@property (NS_NONATOMIC_IOSONLY, readonly) int numberOfVideoTracks;
+450:@property (readwrite) int currentVideoSubTitleIndex;
+456:@property (NS_NONATOMIC_IOSONLY, readonly, copy) NSArray *videoSubTitlesNames;
+462:@property (NS_NONATOMIC_IOSONLY, readonly, copy) NSArray *videoSubTitlesIndexes;
+468:@property (NS_NONATOMIC_IOSONLY, readonly) int numberOfSubtitlesTracks;
+475:- (BOOL)openVideoSubTitlesFromFile:(NSString *)path __attribute__((deprecated));
+480:typedef NS_ENUM(unsigned, VLCMediaPlaybackSlaveType)
+494:- (int)addPlaybackSlave:(NSURL *)slaveURL type:(VLCMediaPlaybackSlaveType)slaveType enforce:(BOOL)enforceSelection;
+502:@property (readwrite) NSInteger currentVideoSubTitleDelay;
+513:@property (readwrite) int currentChapterIndex;
+517:- (void)previousChapter;
+521:- (void)nextChapter;
+526:- (int)numberOfChaptersForTitle:(int)titleIndex;
+532:- (NSArray *)chaptersForTitleIndex:(int)titleIndex __attribute__((deprecated));
+557:- (NSArray *)chapterDescriptionsOfTitle:(int)titleIndex;
+563:@property (readwrite) int currentTitleIndex;
+568:@property (readonly) int numberOfTitles;
+574:@property (readonly) NSUInteger countOfTitles __attribute__((deprecated));
+579:@property (NS_NONATOMIC_IOSONLY, readonly, copy) NSArray *titles __attribute__((deprecated));
+603:@property (NS_NONATOMIC_IOSONLY, readonly, copy) NSArray *titleDescriptions;
+609:@property (readonly) int indexOfLongestTitle;
+620:@property (readwrite) int currentAudioTrackIndex;
+626:@property (NS_NONATOMIC_IOSONLY, readonly, copy) NSArray *audioTrackNames;
+632:@property (NS_NONATOMIC_IOSONLY, readonly, copy) NSArray *audioTrackIndexes;
+638:@property (NS_NONATOMIC_IOSONLY, readonly) int numberOfAudioTracks;
+647:@property (NS_NONATOMIC_IOSONLY) int audioChannel;
+655:@property (readwrite) NSInteger currentAudioPlaybackDelay;
+660:@property (readonly, nullable) VLCMediaLoudness *momentaryLoudness;
+666:@property (nonatomic, nullable) VLCAudioEqualizer *equalizer;
+675:@property (weak, readonly) NSArray *equalizerProfiles DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMediaPlayer equalizer] instead");
+681:- (void)resetEqualizerFromProfile:(unsigned)profile DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMediaPlayer equalizer] instead");
+688:@property (readwrite) BOOL equalizerEnabled DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMediaPlayer equalizer] instead");
+695:@property (readwrite) CGFloat preAmplification DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMediaPlayer equalizer] instead");
+700:@property (readonly) unsigned numberOfBands DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMediaPlayer equalizer] instead");
+706:- (CGFloat)frequencyOfBandAtIndex:(unsigned)index DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMediaPlayer equalizer] instead");
+712:- (void)setAmplification:(CGFloat)amplification forBand:(unsigned)index DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMediaPlayer equalizer] instead");
+718:- (CGFloat)amplificationOfBand:(unsigned)index DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMediaPlayer equalizer] instead");
+727:@property (NS_NONATOMIC_IOSONLY, strong, nullable) VLCMedia *media;
+736:- (void)play;
+741:- (void)pause;
+746:- (void)stop;
+751:- (void)gotoNextFrame;
+756:- (void)fastForward;
+762:- (void)fastForwardAtRate:(float)rate;
+767:- (void)rewind;
+773:- (void)rewindAtRate:(float)rate;
+779:- (void)jumpBackward:(int)interval;
+785:- (void)jumpForward:(int)interval;
+790:- (void)extraShortJumpBackward;
+795:- (void)extraShortJumpForward;
+800:- (void)shortJumpBackward;
+805:- (void)shortJumpForward;
+810:- (void)mediumJumpBackward;
+815:- (void)mediumJumpForward;
+820:- (void)longJumpBackward;
+825:- (void)longJumpForward;
+830:- (void)performNavigationAction:(VLCMediaPlaybackNavigationAction)action;
+843:- (BOOL)updateViewpoint:(float)yaw pitch:(float)pitch roll:(float)roll fov:(float)fov absolute:(BOOL)absolute;
+850:@property (nonatomic) float yaw;
+857:@property (nonatomic) float pitch;
+864:@property (nonatomic) float roll;
+871:@property (nonatomic) float fov;
+879:@property (NS_NONATOMIC_IOSONLY, getter=isPlaying, readonly) BOOL playing;
+885:@property (NS_NONATOMIC_IOSONLY, readonly) BOOL willPlay;
+891:@property (NS_NONATOMIC_IOSONLY, readonly) VLCMediaPlayerState state;
+897:@property (NS_NONATOMIC_IOSONLY) float position;
+904:@property (NS_NONATOMIC_IOSONLY, getter=isSeekable, readonly) BOOL seekable;
+910:@property (NS_NONATOMIC_IOSONLY, readonly) BOOL canPause;
+917:@property (NS_NONATOMIC_IOSONLY, readonly, copy, nullable) NSArray *snapshots;
+926:@property (NS_NONATOMIC_IOSONLY, readonly, nullable) UIImage *lastSnapshot;
+934:@property (NS_NONATOMIC_IOSONLY, readonly, nullable) NSImage *lastSnapshot;
+942:- (BOOL)startRecordingAtPath:(NSString *)path;
+948:- (BOOL)stopRecording;
+961:- (BOOL)setRendererItem:(nullable VLCRendererItem *)item;
+95:- (void)mediaMetaDataDidChange:(VLCMedia *)aMedia;
+102:- (void)mediaDidFinishParsing:(VLCMedia *)aMedia;
+121:+ (instancetype)mediaWithURL:(NSURL *)anURL;
+129:+ (instancetype)mediaWithPath:(NSString *)aPath;
+137:+ (NSString *)codecNameForFourCC:(uint32_t)fourcc trackType:(NSString *)trackType;
+146:+ (instancetype)mediaAsNodeWithName:(NSString *)aName;
+154:- (instancetype)initWithURL:(NSURL *)anURL;
+161:- (instancetype)initWithPath:(NSString *)aPath;
+174:- (instancetype)initWithStream:(NSInputStream *)stream;
+181:- (instancetype)initAsNodeWithName:(NSString *)aName;
+222:@property (readonly) VLCMediaType mediaType;
+233:- (NSComparisonResult)compare:(nullable VLCMedia *)media;
+239:@property (nonatomic, weak, nullable) id<VLCMediaDelegate> delegate;
+246:@property (nonatomic, readwrite, strong) VLCTime * length;
+256:- (VLCTime *)lengthWaitUntilDate:(NSDate *)aDate;
+262:@property (nonatomic, readonly) BOOL isParsed __attribute__((deprecated));
+278:@property (nonatomic, readonly) VLCMediaParsedStatus parsedStatus;
+283:@property (nonatomic, readonly, strong, nullable) NSURL * url;
+288:@property (nonatomic, readonly, strong, nullable) VLCMediaList * subitems;
+297:- (nullable NSString *)metadataForKey:(NSString *)key __attribute__((deprecated));
+306:- (void)setMetadata:(NSString *)data forKey:(NSString *)key __attribute__((deprecated));
+313:@property (NS_NONATOMIC_IOSONLY, readonly) BOOL saveMetadata __attribute__((deprecated));
+319:@property (nonatomic, readonly, copy) NSDictionary * metaDictionary __attribute__((deprecated));
+324:@property (nonatomic, readonly) VLCMediaMetaData *metaData;
+329:@property (nonatomic, readonly) VLCMediaState state;
+334:@property (NS_NONATOMIC_IOSONLY, getter=isMediaSizeSuitableForDevice, readonly) BOOL mediaSizeSuitableForDevice;
+500:@property (NS_NONATOMIC_IOSONLY, readonly, copy) NSArray *tracksInformation;
+505:@property (nonatomic, nullable) id userData;
+517:- (void)parse __attribute__((deprecated));
+525:- (void)synchronousParse __attribute__((deprecated));
+549:- (int)parseWithOptions:(VLCMediaParsingOptions)options;
+562:- (int)parseWithOptions:(VLCMediaParsingOptions)options timeout:(int)timeoutValue;
+570:- (void)parseStop;
+580:- (void)addOption:(NSString *)option;
+581:- (void)addOptions:(NSDictionary*)options;
+598:- (int)storeCookie:(NSString *)cookie
+609:- (void)clearStoredCookies;
+660:@property (nonatomic, readonly) VLCMediaStats statistics;
+673:@property (NS_NONATOMIC_IOSONLY, readonly, copy, nullable) NSDictionary *stats DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+679:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfReadBytesOnInput DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+684:@property (NS_NONATOMIC_IOSONLY, readonly) float inputBitrate DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+690:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfReadBytesOnDemux DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+695:@property (NS_NONATOMIC_IOSONLY, readonly) float demuxBitrate DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+701:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfDecodedVideoBlocks DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+706:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfDecodedAudioBlocks DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+712:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfDisplayedPictures DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+717:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfLostPictures DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+723:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfPlayedAudioBuffers DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+728:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfLostAudioBuffers DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+734:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfSentPackets DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+739:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfSentBytes DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+744:@property (NS_NONATOMIC_IOSONLY, readonly) float streamOutputBitrate DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+750:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfCorruptedDataPackets DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+756:@property (NS_NONATOMIC_IOSONLY, readonly) NSInteger numberOfDiscontinuties DEPRECATED_MSG_ATTRIBUTE("Use -[VLCMedia statistics] instead");
+38:+ (VLCTime *)nullTime;
+44:+ (VLCTime *)timeWithNumber:(nullable NSNumber *)aNumber;
+50:+ (VLCTime *)timeWithInt:(int)aInt;
+57:- (instancetype)initWithNumber:(nullable NSNumber *)aNumber;
+63:- (instancetype)initWithInt:(int)aInt;
+70:@property (nonatomic, readonly, nullable) NSNumber * value;    ///< Holds, in milliseconds, the VLCTime value
+76:@property (readonly) NSNumber * numberValue __attribute__((deprecated));	    // here for backwards compatibility
+82:@property (readonly) NSString * stringValue;
+87:@property (readonly) NSString * verboseStringValue;
+92:@property (readonly) NSString * minuteStringValue;
+97:@property (readonly) int intValue;
+105:- (NSComparisonResult)compare:(VLCTime *)aTime;
+111:- (BOOL)isEqual:(nullable id)object;
+116:- (NSUInteger)hash;
