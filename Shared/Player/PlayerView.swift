@@ -362,9 +362,16 @@ struct PlayerView: View {
                 PanelItem(title: t.id < 0 ? "Désactivés" : t.name, on: t.id == engine.currentSubtitle) { engine.setSubtitle(t.id) }
             }
         case .speed:
-            return [0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map { r in
-                PanelItem(title: r == 1 ? "Normale" : String(format: "×%g", r), on: abs(Double(engine.rate) - r) < 0.01) { engine.setRate(Float(r)) }
+            let rates: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+            let current = Double(engine.rate)
+            var out: [PanelItem] = []
+            for r in rates {
+                let title: String = r == 1 ? "Normale" : String(format: "×%g", r)
+                let on: Bool = abs(current - r) < 0.01
+                let rate = Float(r)
+                out.append(PanelItem(title: title, on: on, action: { engine.setRate(rate) }))
             }
+            return out
         }
     }
 
