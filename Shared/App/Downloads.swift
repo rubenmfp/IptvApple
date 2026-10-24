@@ -78,20 +78,23 @@ final class DownloadManager: NSObject, ObservableObject {
             }
         }
         // téléchargement encore en cours dans la session d'arrière-plan : on le reprend en main
-        session.getAllTasks { [weak self] tasks in
-            Task { @MainActor in
-                guard let self else { return }
-                if let t = tasks.compactMap({ $0 as? URLSessionDownloadTask }).first(where: { $0.state == .running }),
-                   let k = t.taskDescription, let i = self.entries.firstIndex(where: { $0.key == k }) {
-                    self.task = t
-                    self.current = k
-                    self.entries[i].state = .downloading
-                } else {
-                    tasks.forEach { $0.cancel() }
-                }
-                self.next()
+        session.getAllTasks { tasks in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { DownloadManager.shared.reattach(tasks) }
             }
         }
+    }
+
+    private func reattach(_ tasks: [URLSessionTask]) {
+        if let t = tasks.compactMap({ $0 as? URLSessionDownloadTask }).first(where: { $0.state == .running }),
+           let k = t.taskDescription, let i = entries.firstIndex(where: { $0.key == k }) {
+            task = t
+            current = k
+            entries[i].state = .downloading
+        } else {
+            tasks.forEach { $0.cancel() }
+        }
+        next()
     }
 
     // MARK: - Consultation
