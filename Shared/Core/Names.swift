@@ -196,11 +196,39 @@ enum Names {
     }
 
     // ---------- chaînes en plusieurs qualités ----------
-    static let liveTokRe = Rx(#"(?i)(^|[\s|\[(_\-])(UHD|4K|FHD|HD|SD|HEVC|H\.?265|1080P?|720P?|50\s?FPS|60\s?FPS|HQ|LQ|BACKUP)(?=$|[\s|\])_\-])"#)
+    static let liveTokRe = Rx(#"(?i)(^|[\s|\[(_\-.:])(UHD|4K|8K|2160P?|FULL\s?HD|FHD|HD\+?|SD|HEVC|H\.?265|H\.?264|1080[PI]?|720P?|576P?|480P?|50\s?FPS|60\s?FPS|HDR|HQ|LQ|RAW|BACKUP)(?=$|[\s|\])_\-.:,])"#)
+    /// Lettres et chiffres en exposant ou petites capitales (« TF1 ᶠᴴᴰ », « ᵁᴴᴰ ³⁸⁴⁰ᴾ »), fréquents dans les listes de chaînes.
+    private static let superMap: [Character: Character] = {
+        let from = Array("ᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁⱽᵂᶠˢᶜᵛˣʰᵈᵉᵏᵖᵗᵘᵒᵃᵇᵍⁱᵐⁿʳʷʸᶻ⁰¹²³⁴⁵⁶⁷⁸⁹⁺")
+        let to = Array("ABDEGHIJKLMNOPRTUVWFSCVXHDEKPTUOABGIMNRWYZ0123456789+")
+        var m: [Character: Character] = [:]
+        for (a, b) in zip(from, to) { m[a] = b }
+        return m
+    }()
+
+    /// Remplace les exposants par des lettres normales ; une suite d'exposants collée au nom en est séparée par une espace.
+    static func plainSuperscripts(_ s: String) -> String {
+        guard s.contains(where: { superMap[$0] != nil }) else { return s }
+        var out = ""
+        var prevSuper = false
+        for ch in s {
+            if let m = superMap[ch] {
+                if !prevSuper, let last = out.last, !last.isWhitespace { out.append(" ") }
+                out.append(m)
+                prevSuper = true
+            } else {
+                if prevSuper, !ch.isWhitespace { out.append(" ") }
+                out.append(ch)
+                prevSuper = false
+            }
+        }
+        return out
+    }
     static let liveTailRe = Rx(#"[\s|_\-]+$"#)
 
     /// « FR: TF1 FHD (backup) » -> (« FR: TF1 », « FHD Secours »). Sans mention de qualité : « ? ».
-    static func cleanLive(_ raw: String) -> (name: String, q: String) {
+    static func cleanLive(_ raw0: String) -> (name: String, q: String) {
+        let raw = plainSuperscripts(raw0)
         var toks: [String] = []
         let ns = raw as NSString
         var t = ""
@@ -220,9 +248,10 @@ enum Names {
         for tok in toks {
             let u = tok.uppercased().replacingOccurrences(of: " ", with: "").replacingOccurrences(of: ".", with: "")
             let l: String
-            if u == "UHD" || u == "4K" { l = "4K" }
-            else if u == "FHD" || u.hasPrefix("1080") { l = "FHD" }
-            else if u == "HD" || u.hasPrefix("720") { l = "HD" }
+            if u == "UHD" || u == "4K" || u.hasPrefix("2160") { l = "4K" }
+            else if u == "FHD" || u == "FULLHD" || u.hasPrefix("1080") { l = "FHD" }
+            else if u == "HD" || u == "HD+" || u.hasPrefix("720") { l = "HD" }
+            else if u.hasPrefix("576") || u.hasPrefix("480") { l = "SD" }
             else if u == "H265" { l = "HEVC" }
             else if u == "BACKUP" { l = "Secours" }
             else { l = u }

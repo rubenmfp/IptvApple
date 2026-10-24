@@ -80,6 +80,15 @@ func chan(_ id: Int, _ raw: String) -> Item {
 }
 let live = Names.mergeLive([chan(1, "TF1 SD"), chan(2, "TF1 FHD"), chan(3, "TF1 HD"), chan(4, "M6 HD")])
 check(live.count, 2, "TF1 regroupée")
+check(Names.cleanLive("FR: TF1 ᶠᴴᴰ").name, "FR: TF1", "exposants retirés du nom")
+check(Names.cleanLive("FR: TF1 ᶠᴴᴰ").q, "FHD", "qualité en exposants")
+check(Names.cleanLive("TF1ᴴᴰ").q, "HD", "exposants collés au nom")
+check(Names.cleanLive("TF1 HD+").q, "HD", "HD+")
+check(Names.cleanLive("TF1 Full HD").q, "FHD", "Full HD")
+check(Names.cleanLive("TF1 2160p").q, "4K", "2160p")
+let live2 = Names.mergeLive([chan(11, "FR: TF1 ᴴᴰ"), chan(12, "FR: TF1 ᶠᴴᴰ"), chan(13, "FR: TF1 ᵁᴴᴰ"), chan(14, "FR: TF1")])
+check(live2.count, 1, "TF1 en exposants regroupée")
+check(live2[0].variants.map(\.q), ["FHD", "HD", "?", "4K"], "qualités en exposants")
 check(live[0].variants.map(\.q), ["FHD", "HD", "SD"], "qualités de chaîne")
 check(Names.liveGenre(chan(5, "beIN SPORTS 1")), "Sport", "genre Sport")
 

@@ -13,6 +13,8 @@ struct BrowseView: View {
     let hero: [Item]
     @State private var selected: Selection?
     @State private var searching = false
+    /// Apple TV : rangée à sélectionner après un appui sur une étiquette de catégorie.
+    @FocusState private var rowFocus: String?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -22,12 +24,10 @@ struct BrowseView: View {
                         HeroView(items: hero) { selected = Selection(item: $0) }
                     }
                     if rows.count > 1 {
-                        CategoryStrip(rows: rows) { id in
-                            withAnimation { proxy.scrollTo(id, anchor: .top) }
-                        }
+                        CategoryStrip(rows: rows) { id in jump(to: id, proxy) }
                     }
                     ForEach(rows) { r in
-                        RowView(row: r) { selected = Selection(item: $0) }
+                        RowView(row: r, focus: $rowFocus) { selected = Selection(item: $0) }
                             .id(r.id)
                     }
                     StatusLine()
@@ -66,6 +66,24 @@ struct BrowseView: View {
             ItemSheet(item: s.item)
         }
         #endif
+    }
+}
+
+extension BrowseView {
+    /// Défile jusqu'à une rangée. Les rangées lointaines ne sont pas encore construites (liste paresseuse) : la première
+    /// tentative s'arrête parfois avant ; on recommence une fois la rangée construite. Sur l'Apple TV, la sélection passe
+    /// sur la première affiche de la rangée (sinon l'étiquette restée sélectionnée ramène l'écran en haut).
+    func jump(to id: String, _ proxy: ScrollViewProxy) {
+        withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: .top) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            proxy.scrollTo(id, anchor: .top)
+            #if os(tvOS)
+            rowFocus = id
+            #endif
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .top) }
+            }
+        }
     }
 }
 
@@ -281,7 +299,14 @@ struct CategoryStrip: View {
 
 struct RowView: View {
     let row: Row
+    var focus: FocusState<String?>.Binding? = nil
     let open: (Item) -> Void
+
+    init(row: Row, focus: FocusState<String?>.Binding? = nil, open: @escaping (Item) -> Void) {
+        self.row = row
+        self.focus = focus
+        self.open = open
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.tv ? 6 : 8) {
@@ -292,8 +317,9 @@ struct RowView: View {
             .padding(.horizontal, Theme.edge)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: Theme.cardGap) {
-                    ForEach(row.items, id: \.key) { item in
-                        PosterCard(item: item, resume: row.id.hasPrefix("resume|")) { open(item) }
+                    ForEach(Array(row.items.enumerated()), id: \.element.key) { n, item in
+                        PosterCard(item: item, resume: row.id.hasPrefix("resume|"),
+                                   focusTag: n == 0 ? focus.map { FocusTag(binding: $0, value: row.id) } : nil) { open(item) }
                     }
                 }
                 .padding(.horizontal, Theme.edge)
@@ -305,9 +331,22 @@ struct RowView: View {
     }
 }
 
+/// Sélection à donner à une affiche (première affiche d'une rangée).
+struct FocusTag {
+    let binding: FocusState<String?>.Binding
+    let value: String
+}
+
+extension View {
+    @ViewBuilder func focusTagged(_ t: FocusTag?) -> some View {
+        if let t { self.focused(t.binding, equals: t.value) } else { self }
+    }
+}
+
 struct PosterCard: View {
     let item: Item
     var resume = false
+    var focusTag: FocusTag? = nil
     let action: () -> Void
     @State private var tmdbRate: Double?
 
@@ -362,6 +401,7 @@ struct PosterCard: View {
             #else
             .buttonStyle(.plain)
             #endif
+            .focusTagged(focusTag)
             // appui long : favoris, listes ; dans « Reprendre » : retirer
             .contextMenu { ItemMenu(item: item, resume: resume) }
             .task(id: item.key) {

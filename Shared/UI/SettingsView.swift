@@ -139,7 +139,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.12 : profils synchronisés avec la TV Android (quand elle les gérera).").foregroundStyle(Theme.dim)
+                    Text("Version 0.13 : choix de la qualité des chaînes, regroupement des qualités amélioré.").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")

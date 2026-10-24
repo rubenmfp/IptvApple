@@ -8,6 +8,8 @@ struct LiveView: View {
     @State private var query = ""
     @State private var term = ""
     @State private var picker: Row?
+    /// Chaîne en plusieurs qualités : choix de la qualité au lancement.
+    @State private var asking: PendingLive?
 
     var body: some View {
         ScrollView(.vertical) {
@@ -49,16 +51,26 @@ struct LiveView: View {
             try? await Task.sleep(nanoseconds: 1_200_000_000)
             if !Task.isCancelled { term = query }
         }
+        .confirmationDialog(asking?.channel.name ?? "", isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } }),
+                            titleVisibility: .visible, presenting: asking) { p in
+            let cur = model.liveVariant(p.channel)
+            ForEach(p.channel.variants, id: \.id) { v in
+                Button((v.q == "?" ? "Standard" : v.q) + (v.id == cur?.id ? "  ✓" : "")) { launch(p, v) }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: { _ in
+            Text("Choisir la qualité (la dernière choisie est cochée ; elle reste modifiable pendant la lecture)")
+        }
         .fullScreenCover(item: $play) { r in
             PlayerView(req: r) { model.progressChanged() }
         }
         #if os(tvOS)
         .fullScreenCover(item: $picker) { r in
-            ChannelPicker(row: r) { c, list in picker = nil; start(c, list, r.title) }
+            ChannelPicker(row: r) { c, list in picker = nil; start(c, list, r.title, after: 0.5) }
         }
         #else
         .sheet(item: $picker) { r in
-            ChannelPicker(row: r) { c, list in picker = nil; start(c, list, r.title) }
+            ChannelPicker(row: r) { c, list in picker = nil; start(c, list, r.title, after: 0.5) }
         }
         #endif
     }
@@ -92,7 +104,7 @@ struct LiveView: View {
                             Text("\(r.items.count)").font(Theme.tv ? .caption2 : .caption2).opacity(0.6).monospacedDigit()
                         }
                     }
-                    .buttonStyle(ChipStyle(tint: r.id.hasPrefix("genre|") ? Theme.accent : nil))
+                    .buttonStyle(ChipStyle())
                 }
             }
             .padding(.horizontal, Theme.edge)
@@ -122,9 +134,31 @@ struct LiveView: View {
         }
     }
 
-    private func start(_ c: Item, _ list: [Item], _ name: String) {
-        play = model.liveRequest(c, list: list, listName: name)
+    /// Lance une chaîne ; si elle existe en plusieurs qualités, demande laquelle (la dernière choisie est proposée cochée).
+    /// `after` : délai quand une autre fenêtre (liste des chaînes) est en train de se fermer.
+    private func start(_ c: Item, _ list: [Item], _ name: String, after: Double = 0) {
+        let go = {
+            if c.variants.count > 1 { asking = PendingLive(channel: c, list: list, name: name) }
+            else { play = model.liveRequest(c, list: list, listName: name) }
+        }
+        if after > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + after) { go() } } else { go() }
     }
+
+    private func launch(_ p: PendingLive, _ v: Variant) {
+        Store.setLiveQuality(p.channel.key, v.q)
+        if v.q != "?" { Store.prefQuality = v.q.split(separator: " ").first.map(String.init) ?? v.q }
+        // la liste de choix se ferme d'abord
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            play = model.liveRequest(p.channel, list: p.list, listName: p.name)
+        }
+    }
+}
+
+struct PendingLive: Identifiable {
+    let channel: Item
+    let list: [Item]
+    let name: String
+    var id: String { channel.key }
 }
 
 struct ChannelCard: View {
