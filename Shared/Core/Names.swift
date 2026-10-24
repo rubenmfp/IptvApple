@@ -89,6 +89,28 @@ enum Names {
         return (t.trimmed, q ?? "?")
     }
 
+    // ---------- épisodes et catégories ----------
+    static let epRe = Rx(#"(?i)\bS\d{1,2}\s?E\d{1,3}\s*[-–:]\s*(.+)$"#)
+
+    /// « Série S01E03 - Le titre » -> « Le titre » (nettoyé) ; sinon le titre nettoyé.
+    static func cleanEpisode(_ raw: String) -> String {
+        if let m = epRe.first(raw), let t = m.group(1, in: raw)?.trimmed, !t.isEmpty { return clean(t).name }
+        return clean(raw).name
+    }
+
+    static let catTagRe = Rx(#"^\s*\|\s*([^|]{1,12}?)\s*\|\s*(.+)$"#)
+    static let langTags: Set<String> = ["FR", "EN", "VF", "VO", "VOST", "VOSTFR", "MULTI", "FRENCH", "UK", "US"]
+
+    /// Nom de catégorie lisible : « |FR| Action » -> « Action », « |2026| Nouveauté » -> « Nouveauté 2026 ».
+    static func cleanCategory(_ raw: String) -> String {
+        var t = raw.trimmed
+        for _ in 0..<3 {
+            guard let m = catTagRe.first(t), let tag = m.group(1, in: t), let rest = m.group(2, in: t) else { break }
+            t = langTags.contains(tag.uppercased()) ? rest.trimmed : "\(rest.trimmed) \(tag)"
+        }
+        return t.isEmpty ? raw.trimmed : t
+    }
+
     // ---------- clé de regroupement ----------
     static let keyParenRe = Rx(#"\([^)]*\)|\[[^\]]*\]"#)
     static let keyCountryRe = Rx(#"\s+-\s+\p{L}{2}$"#)

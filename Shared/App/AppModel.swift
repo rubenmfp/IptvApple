@@ -186,6 +186,60 @@ final class AppModel: ObservableObject {
         return Row(id: "resume|\(type ?? "*")", title: "Reprendre", items: items)
     }
 
+    /// Rangée « Mes favoris » (films et séries).
+    func favoritesRow(_ type: String?) -> Row? {
+        _ = progressTick
+        var seen = Set<String>()
+        let items = Store.favs.compactMap { derived.byKey[$0] }
+            .filter { (type == nil || $0.type == type) && seen.insert($0.key).inserted }
+        return items.isEmpty ? nil : Row(id: "favs|\(type ?? "*")", title: "Mes favoris", items: items)
+    }
+
+    /// Titres de la même catégorie (pour le bas de la fiche).
+    func sameCategory(as item: Item) -> [Item] {
+        let pool = item.type == "vod" ? catalog?.vod : catalog?.series
+        return Array((pool ?? []).filter { $0.cat == item.cat && $0.key != item.key && $0.poster != nil }.shuffled().prefix(20))
+    }
+
+    // ---------- fiches ----------
+    private var infoCache: [String: ItemInfo] = [:]
+
+    func cachedInfo(_ item: Item) -> ItemInfo? { infoCache[item.key] }
+
+    func info(for item: Item) async throws -> ItemInfo {
+        if let i = infoCache[item.key] { return i }
+        guard let a = account else { throw XtreamError.badCredentials }
+        let i = try await XtreamClient(a).info(type: item.type, id: item.id)
+        infoCache[item.key] = i
+        return i
+    }
+
+    // ---------- épisodes ----------
+    /// Lecture d'un épisode, avec l'épisode suivant (pour le bouton « Épisode suivant »).
+    func episodeRequest(series: Item, info: ItemInfo, episode e: Episode, fromStart: Bool = false) -> PlayRequest {
+        let pos = fromStart ? 0 : Store.pos(e.key)
+        var r = PlayRequest(title: "\(series.name) · S\(e.season) É\(e.num) \(e.title)", key: e.key, kind: "series",
+                            urls: fileURLs(kind: "series", id: e.id, ext: e.ext), startMs: pos > 10_000 ? pos : 0)
+        r.seriesId = series.id
+        if let i = info.episodes.firstIndex(of: e), i + 1 < info.episodes.count {
+            let n = info.episodes[i + 1]
+            r.next = { [weak self] in self?.episodeRequest(series: series, info: info, episode: n, fromStart: true) }
+            r.nextTitle = "S\(n.season) É\(n.num) \(n.title)"
+        }
+        return r
+    }
+
+    /// Épisode que « Lecture » doit lancer : celui en cours, ou le suivant s'il est terminé, ou le premier.
+    static func episodeToPlay(seriesId: Int, info: ItemInfo) -> (Episode, resume: Bool)? {
+        guard let first = info.episodes.first else { return nil }
+        let last = Store.lastEp(seriesId)
+        guard last > 0, let i = info.episodes.firstIndex(where: { $0.id == last }) else { return (first, false) }
+        let e = info.episodes[i]
+        if Store.pos(e.key) > 10_000 { return (e, true) }
+        if Store.seen(e.key), i + 1 < info.episodes.count { return (info.episodes[i + 1], false) }
+        return (e, false)
+    }
+
     // ---------- adresses de lecture ----------
     private static func safe(_ s: String) -> String {
         if s.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil { return s }

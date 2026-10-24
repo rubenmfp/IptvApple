@@ -40,6 +40,22 @@ enum Store {
         stamp("seen|" + k)
     }
 
+    // ---------- favoris ----------
+    static var favs: [String] { d.stringArray(forKey: "favs") ?? [] }
+    static func isFav(_ k: String) -> Bool { favs.contains(k) }
+    static func toggleFav(_ k: String) {
+        if isFav(k) { d.set(favs.filter { $0 != k }, forKey: "favs") } else { d.set([k] + favs, forKey: "favs") }
+        stamp("fav|" + k)
+    }
+
+    // ---------- dernier épisode lancé d'une série ----------
+    static func lastEp(_ seriesId: Int) -> Int { d.integer(forKey: "last_\(seriesId)") }
+    static func setLastEp(_ seriesId: Int, _ epId: Int) {
+        if lastEp(seriesId) == epId { return }
+        d.set(epId, forKey: "last_\(seriesId)")
+        stamp("last|\(seriesId)")
+    }
+
     // ---------- lectures récentes (rangée « Reprendre ») ----------
     static var recent: [String] { d.stringArray(forKey: "recent") ?? [] }
     static func addRecent(_ k: String) {
@@ -65,8 +81,8 @@ enum Store {
 
     /// Efface tout (déconnexion).
     static func reset() {
-        for k in d.dictionaryRepresentation().keys where k.hasPrefix("p_") || k.hasPrefix("d_") || k.hasPrefix("s_") || k.hasPrefix("ext_")
-            || ["recent", "rlive", "stamps"].contains(k) {
+        for k in d.dictionaryRepresentation().keys where k.hasPrefix("p_") || k.hasPrefix("d_") || k.hasPrefix("s_") || k.hasPrefix("ext_") || k.hasPrefix("last_")
+            || ["recent", "rlive", "stamps", "favs"].contains(k) {
             d.removeObject(forKey: k)
         }
     }

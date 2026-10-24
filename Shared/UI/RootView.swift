@@ -21,13 +21,13 @@ struct MainTabs: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            BrowseView(rows: [model.resumeRow(nil)].compactMap { $0 } + model.derived.home, hero: model.derived.heroHome)
+            BrowseView(rows: [model.resumeRow(nil), model.favoritesRow(nil)].compactMap { $0 } + model.derived.home, hero: model.derived.heroHome)
                 .tabItem { Label("Accueil", systemImage: "house") }
                 .tag(1)
-            BrowseView(rows: [model.resumeRow("vod")].compactMap { $0 } + model.derived.vod, hero: model.derived.heroVod)
+            BrowseView(rows: [model.resumeRow("vod"), model.favoritesRow("vod")].compactMap { $0 } + model.derived.vod, hero: model.derived.heroVod)
                 .tabItem { Label("Films", systemImage: "film") }
                 .tag(2)
-            BrowseView(rows: [model.resumeRow("series")].compactMap { $0 } + model.derived.series, hero: model.derived.heroSeries)
+            BrowseView(rows: [model.resumeRow("series"), model.favoritesRow("series")].compactMap { $0 } + model.derived.series, hero: model.derived.heroSeries)
                 .tabItem { Label("Séries", systemImage: "tv") }
                 .tag(3)
             LiveView()

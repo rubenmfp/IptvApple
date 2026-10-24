@@ -160,7 +160,7 @@ final class XtreamClient {
         default: pair = ("get_series_categories", "get_series")
         }
         let (catAction, action) = pair
-        let cats = try await categories(catAction)
+        let cats = try await categories(catAction).map { ($0.0, Names.cleanCategory($0.1)) }
         // grosse liste : téléchargée dans un fichier, puis lue sans tout charger en objets
         let (file, resp) = try await session.download(from: try apiURL("action=\(action)"))
         defer { try? FileManager.default.removeItem(at: file) }
@@ -172,6 +172,67 @@ final class XtreamClient {
         var seen = Set<String>()
         for (_, n) in cats where seen.insert(n).inserted { names.append(n) }
         return (names, merged)
+    }
+
+    /// Fiche détaillée d'un film ou d'une série (avec ses épisodes).
+    func info(type: String, id: Int) async throws -> ItemInfo {
+        let ser = type == "series"
+        let data = try await get(ser ? "action=get_series_info&series_id=\(id)" : "action=get_vod_info&vod_id=\(id)")
+        guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw XtreamError.unexpected("fiche illisible") }
+        return Self.parseInfo(o, series: ser)
+    }
+
+    static func parseInfo(_ o: [String: Any], series: Bool) -> ItemInfo {
+        func str(_ d: [String: Any]?, _ k: String) -> String {
+            guard let v = d?[k], !(v is NSNull) else { return "" }
+            if let a = v as? [Any] { return a.first.map { "\($0)" } ?? "" }
+            return "\(v)".trimmed
+        }
+        let n = o["info"] as? [String: Any] ?? [:]
+        let md = o["movie_data"] as? [String: Any]
+        var info = ItemInfo()
+        info.plot = str(n, "plot").isEmpty ? str(n, "description") : str(n, "plot")
+        info.cast = str(n, "cast").isEmpty ? str(n, "actors") : str(n, "cast")
+        info.director = str(n, "director")
+        info.genre = str(n, "genre")
+        info.rating = str(n, "rating")
+        info.releaseDate = [str(n, "releaseDate"), str(n, "releasedate"), str(n, "release_date")].first { !$0.isEmpty } ?? ""
+        let bd = str(n, "backdrop_path")
+        info.backdrop = bd.hasPrefix("http") ? bd : nil
+        info.tmdb = [str(n, "tmdb_id"), str(n, "tmdb"), str(md, "tmdb_id")].compactMap { Int($0) }.first ?? 0
+        info.ext = str(md, "container_extension").lowercased()
+        // durée : « 01:52:00 », « 112 min » ou secondes selon les serveurs
+        let dur = str(n, "duration")
+        if let m = Rx(#"^(\d{1,2}):(\d{2})"#).first(dur), let h = m.group(1, in: dur), let mi = m.group(2, in: dur) {
+            info.runtime = (Int(h) ?? 0) * 60 + (Int(mi) ?? 0)
+        } else if let s = Int(str(n, "duration_secs")) {
+            info.runtime = s / 60
+        } else {
+            info.runtime = Int(str(n, "episode_run_time")) ?? 0
+        }
+        if series {
+            var eps: [Episode] = []
+            var groups: [(String, Any)] = []
+            if let e = o["episodes"] as? [String: Any] { groups = e.map { ($0.key, $0.value) } }
+            else if let e = o["episodes"] as? [Any] { groups = e.enumerated().map { ("\($0.offset + 1)", $0.element) } }
+            for (season, list) in groups {
+                for case let x as [String: Any] in (list as? [Any] ?? []) {
+                    let ei = x["info"] as? [String: Any]
+                    let img = ["movie_image", "cover_big", "cover"].map { str(ei, $0) }.first { $0.hasPrefix("http") }
+                    var secs = Int(str(ei, "duration_secs")) ?? 0
+                    if secs == 0, let m = Rx(#"^(\d{1,2}):(\d{2}):(\d{2})"#).first(str(ei, "duration")) {
+                        let d = str(ei, "duration")
+                        secs = (Int(m.group(1, in: d) ?? "") ?? 0) * 3600 + (Int(m.group(2, in: d) ?? "") ?? 0) * 60
+                    }
+                    let ext = str(x, "container_extension")
+                    eps.append(Episode(id: Int(str(x, "id")) ?? 0, title: Names.cleanEpisode(str(x, "title")),
+                                       season: Int(str(x, "season")) ?? Int(season) ?? 1, num: Int(str(x, "episode_num")) ?? 0,
+                                       ext: ext.isEmpty ? "mp4" : ext, image: img, plot: str(ei, "plot"), runtime: secs / 60))
+                }
+            }
+            info.episodes = eps.filter { $0.id > 0 }.sorted { ($0.season, $0.num) < ($1.season, $1.num) }
+        }
+        return info
     }
 
     /// Lecture d'une liste get_vod_streams / get_series / get_live_streams.

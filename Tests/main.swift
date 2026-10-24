@@ -37,6 +37,12 @@ check(qual("SD: Titre"), "SD", "SD en tête")
 check(clean("SD"), "SD", "titre réduit à SD : gardé")
 check(clean("Titre HD MULTI"), "Titre", "HD puis MULTI")
 
+check(Names.cleanEpisode("Lupin S02E03 - Chapitre 3"), "Chapitre 3", "titre d'épisode")
+check(Names.cleanEpisode("Épisode 4 |FR"), "Épisode 4", "épisode sans code")
+check(Names.cleanCategory("|FR| Action"), "Action", "catégorie avec langue")
+check(Names.cleanCategory("|2026| Nouveauté"), "Nouveauté 2026", "catégorie avec année")
+check(Names.cleanCategory("Comédie"), "Comédie", "catégorie simple")
+
 // ---------- clé de regroupement ----------
 let k = Names.mergeKey("L'Été")
 check(Names.mergeKey("L’été"), k, "apostrophe typographique")
@@ -105,6 +111,24 @@ check(ser[0].poster, "c.jpg", "cover")
 var threw = false
 do { _ = try XtreamClient.parseStreams(Data(#"{"user_info":{"auth":0}}"#.utf8), type: "vod", cats: [:]) } catch { threw = true }
 check(threw, true, "objet sans contenu = erreur")
+
+// ---------- fiche de série ----------
+let infoJSON = #"""
+{"info":{"plot":"Un résumé.","cast":"A, B","director":"C","genre":"Drame","releaseDate":"2021-01-08","backdrop_path":["http://x/b.jpg"],"episode_run_time":"45","tmdb":"96677"},
+ "episodes":{"2":[{"id":"902","episode_num":1,"title":"Lupin S02E01 - Chapitre 6","container_extension":"mkv","season":2,"info":{"movie_image":"http://x/e.jpg","duration_secs":2700}}],
+             "1":[{"id":"901","episode_num":"1","title":"Lupin S01E01","container_extension":"","info":{"duration":"00:47:10"}}]}}
+"""#
+let infoObj = try JSONSerialization.jsonObject(with: Data(infoJSON.utf8)) as! [String: Any]
+let sinfo = XtreamClient.parseInfo(infoObj, series: true)
+check(sinfo.episodes.map(\.id), [901, 902], "épisodes triés par saison")
+check(sinfo.seasons, [1, 2], "saisons")
+check(sinfo.episodes[1].title, "Chapitre 6", "titre d'épisode nettoyé")
+check(sinfo.episodes[0].ext, "mp4", "extension par défaut")
+check(sinfo.episodes[1].runtime, 45, "durée d'épisode")
+check(sinfo.episodes[0].runtime, 47, "durée hh:mm:ss")
+check(sinfo.backdrop, "http://x/b.jpg", "image de fond en tableau")
+check(sinfo.tmdb, 96677, "tmdb de la série")
+check(sinfo.runtime, 45, "durée moyenne")
 
 // ---------- lien M3U ----------
 let l1 = Xtream.parseLink("http://ex.com:8080/get.php?username=ab%40c&password=p+q&type=m3u_plus&output=ts")

@@ -41,3 +41,33 @@ struct Catalog: Codable {
     var serCats: [String]
     var date: Date
 }
+
+/// Épisode d'une série.
+struct Episode: Codable, Hashable {
+    var id: Int
+    var title: String
+    var season: Int
+    var num: Int
+    var ext: String
+    var image: String?
+    var plot: String = ""
+    var runtime: Int = 0          // minutes
+    var key: String { "ep:\(id)" }
+}
+
+/// Fiche détaillée (get_vod_info / get_series_info).
+struct ItemInfo: Codable {
+    var plot: String = ""
+    var cast: String = ""
+    var director: String = ""
+    var genre: String = ""
+    var rating: String = ""
+    var releaseDate: String = ""
+    var backdrop: String?
+    var episodes: [Episode] = []
+    var ext: String = ""
+    var tmdb: Int = 0
+    var runtime: Int = 0          // minutes
+
+    var seasons: [Int] { Array(Set(episodes.map(\.season))).sorted() }
+}

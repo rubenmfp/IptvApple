@@ -9,6 +9,9 @@ struct PlayRequest: Identifiable {
     let kind: String           // "vod", "series" (épisode) ou "live"
     let urls: [URL]
     var startMs: Int = 0
+    var seriesId: Int?         // épisode : série à laquelle il appartient
+    var next: (() -> PlayRequest?)?
+    var nextTitle: String?
     var live: Bool { kind == "live" }
 }
 
@@ -20,7 +23,7 @@ struct VideoSurface: UIViewRepresentable {
 }
 
 /// Éléments sélectionnables du lecteur (Apple TV).
-enum PlayerFocus: Hashable { case surface, timeline, back, play, forward, audio, subtitles, speed, aspect, rotation }
+enum PlayerFocus: Hashable { case surface, timeline, back, play, forward, audio, subtitles, speed, aspect, rotation, next }
 
 /// Panneaux d'options (Apple TV).
 enum OptionPanel: Equatable {
@@ -30,8 +33,15 @@ enum OptionPanel: Equatable {
 }
 
 struct PlayerView: View {
-    let req: PlayRequest
+    /// Lecture en cours (change quand on passe à l'épisode suivant).
+    @State private var req: PlayRequest
     var onClose: () -> Void = {}
+    @State private var nextDismissed = false
+
+    init(req: PlayRequest, onClose: @escaping () -> Void = {}) {
+        _req = State(initialValue: req)
+        self.onClose = onClose
+    }
 
     @StateObject private var engine = PlayerEngine()
     @Environment(\.dismiss) private var dismiss
@@ -63,6 +73,9 @@ struct PlayerView: View {
             #endif
             stateLayer
             if controls { controlsLayer.transition(.opacity) }
+            if let title = req.nextTitle, req.next != nil, !nextDismissed {
+                NextEpisodeOverlay(clock: engine.clock, title: title, focus: $focus, controlsShown: controls) { goNext() }
+            }
             #if os(tvOS)
             if let p = panel { optionPanel(p).transition(.move(edge: .trailing).combined(with: .opacity)) }
             #endif
@@ -83,7 +96,10 @@ struct PlayerView: View {
         .onDisappear(perform: finish)
         .onReceive(engine.clock.$timeMs) { _ in autosave() }
         .onChange(of: engine.phase) { _, p in
-            if p == .ended { saveProgress(); close() }
+            if p == .ended {
+                saveProgress()
+                if req.next != nil { goNext() } else { close() }
+            }
             if case .failed = p { showControls() }
         }
         .onChange(of: scenePhase) { _, p in
@@ -94,6 +110,7 @@ struct PlayerView: View {
         #if os(tvOS)
         .onExitCommand {
             if panel != nil { closePanel() }
+            else if focus == .next { nextDismissed = true; focus = .surface }
             else if controls, engine.phase != .opening, !isFailed { hideControls() } else { close() }
         }
         .onPlayPauseCommand { engine.togglePause(); showControls() }
@@ -295,18 +312,42 @@ struct PlayerView: View {
         // iPhone : « Plein écran » par défaut (beaucoup de films ont des bandes noires incrustées), puis le dernier choix
         engine.defaultAspect = PlayerEngine.Aspect(rawValue: Prefs.aspect) ?? .fill
         #endif
+        startPlayback(req)
+        showControls()
+    }
+
+    /// Lance une lecture (au départ, ou pour l'épisode suivant).
+    private func startPlayback(_ r: PlayRequest) {
         engine.onStarted = { url in
-            if !req.live, !url.pathExtension.isEmpty { Store.setGoodExt(req.kind, url.pathExtension) }
-            if req.live { Store.addRecentLive(req.key) } else { Store.addRecent(req.key) }
+            if !r.live, !url.pathExtension.isEmpty { Store.setGoodExt(r.kind, url.pathExtension) }
+            if r.live {
+                Store.addRecentLive(r.key)
+            } else if let sid = r.seriesId {
+                Store.addRecent("series:\(sid)")
+                if let epId = Int(r.key.replacingOccurrences(of: "ep:", with: "")) { Store.setLastEp(sid, epId) }
+            } else {
+                Store.addRecent(r.key)
+            }
         }
         #if os(iOS)
         // l'écran passe en paysage : on attend la fin de la rotation pour que VLC prenne la bonne taille d'image
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            engine.play(req.urls, startAt: req.startMs, live: req.live)
+            engine.play(r.urls, startAt: r.startMs, live: r.live)
         }
         #else
-        engine.play(req.urls, startAt: req.startMs, live: req.live)
+        engine.play(r.urls, startAt: r.startMs, live: r.live)
         #endif
+    }
+
+    /// Épisode suivant : l'épisode en cours est noté comme vu, puis le suivant démarre dans le même lecteur.
+    private func goNext() {
+        guard let make = req.next, let n = make() else { close(); return }
+        if engine.durationMs > 0 { Store.setProgress(req.key, pos: engine.durationMs, dur: engine.durationMs) }
+        engine.stop()
+        nextDismissed = false
+        req = n
+        // une seule connexion autorisée : petite pause entre la fermeture et l'ouverture
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { startPlayback(n) }
         showControls()
     }
 
@@ -499,12 +540,69 @@ struct PlayerView: View {
         hideTask?.cancel()
         withAnimation(.easeIn(duration: 0.2)) { controls = false }
         #if os(tvOS)
-        DispatchQueue.main.async { focus = .surface }
+        if focus != .next { DispatchQueue.main.async { focus = .surface } }
         #endif
     }
 }
 
 // MARK: - Éléments qui suivent la position (redessinés seuls, sans toucher aux menus)
+
+/// Bouton « Épisode suivant » pendant le générique estimé (4 % de l'épisode, entre 20 s et 3 min).
+struct NextEpisodeOverlay: View {
+    @ObservedObject var clock: PlaybackClock
+    let title: String
+    var focus: FocusState<PlayerFocus?>.Binding
+    let controlsShown: Bool
+    let action: () -> Void
+
+    private var visible: Bool {
+        guard clock.durationMs > 60_000 else { return false }
+        let window = min(max(clock.durationMs * 4 / 100, 20_000), 180_000)
+        let left = clock.durationMs - clock.timeMs
+        return left > 0 && left < window
+    }
+
+    var body: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                if visible {
+                    Button(action: action) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "forward.end.fill")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Épisode suivant").font(Theme.tv ? .headline : .subheadline.bold())
+                                Text(title).font(Theme.tv ? .caption : .caption2).lineLimit(1).opacity(0.8)
+                            }
+                        }
+                        .padding(.horizontal, Theme.tv ? 28 : 16)
+                        .padding(.vertical, Theme.tv ? 16 : 10)
+                        .frame(maxWidth: Theme.tv ? 520 : 300, alignment: .leading)
+                        #if os(iOS)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 10))
+                        .foregroundStyle(.black)
+                        #endif
+                    }
+                    #if os(iOS)
+                    .buttonStyle(PressStyle())
+                    #endif
+                    .focused(focus, equals: .next)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .padding(.trailing, Theme.tv ? 80 : 16)
+            .padding(.bottom, controlsShown ? (Theme.tv ? 260 : 150) : (Theme.tv ? 70 : 30))
+        }
+        .animation(.easeOut(duration: 0.3), value: visible)
+        #if os(tvOS)
+        .onChange(of: visible) { _, v in
+            // Apple TV : OK lance tout de suite l'épisode suivant, Retour masque le bouton
+            if v { DispatchQueue.main.async { focus.wrappedValue = .next } }
+        }
+        #endif
+    }
+}
 
 /// Heure et heure de fin, deux lignes alignées à droite, sans fond.
 struct ClockView: View {
