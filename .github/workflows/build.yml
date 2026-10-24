@@ -49,7 +49,7 @@ jobs:
           grep -E "warning:" tv.log | grep -v "appintents" | sort -u | head -20 | sed 's/^/::warning title=AppleTV::/' || true
           grep -q "BUILD SUCCEEDED" tv.log
 
-      - name: Fichiers d'installation (.ipa, non signés : Sideloadly les signe)
+      - name: "Fichiers d'installation (.ipa non signés, Sideloadly les signe)"
         run: |
           set -e
           v=$(grep -m1 -oE 'MARKETING_VERSION = [0-9.]+' IptvApple.xcodeproj/project.pbxproj | grep -oE '[0-9.]+$')
