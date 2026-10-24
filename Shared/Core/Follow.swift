@@ -94,16 +94,16 @@ func recoList(pool: [Item], all: [Item], recent: [String], favs: [String], ratin
     for sd in seeds {
         let x = w[sd.key] ?? 0
         catW[sd.cat, default: 0] += x
-        for a in people(sd).split(separator: ",").map({ $0.trimmed.lowercased() }) where !a.isEmpty { actW[a, default: 0] += x }
+        for a in people(sd).split(separator: ",").map({ String($0).trimmed.lowercased() }) where !a.isEmpty { actW[a, default: 0] += x }
     }
     let seen = Set(recent + favs).union(ratings.keys)
     let cand = pool.filter { $0.poster != nil && !seen.contains($0.key) }
     if seeds.isEmpty { return Array(cand.shuffled().prefix(15)) }
     let scored = cand.map { c -> (Item, Double) in
-        let common = actW.isEmpty ? 0 : people(c).split(separator: ",").reduce(0) { $0 + (actW[$1.trimmed.lowercased()] ?? 0) }
+        let common = actW.isEmpty ? 0 : people(c).split(separator: ",").reduce(0) { $0 + (actW[String($1).trimmed.lowercased()] ?? 0) }
         let cw = Double(min(max(catW[c.cat] ?? 0, -6), 6))
         return (c, cw + 1.5 * Double(min(max(common, -8), 8)) + Double.random(in: 0..<1))
     }
     var keys = Set<String>()
-    return scored.sorted { $0.1 > $1.1 }.prefix(15).map(\.0).filter { keys.insert($0.key).inserted }
+    return scored.sorted { $0.1 > $1.1 }.prefix(15).map { $0.0 }.filter { keys.insert($0.key).inserted }
 }
