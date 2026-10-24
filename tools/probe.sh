@@ -7,6 +7,11 @@ for p in MobileVLCKit TVVLCKit VLCKit; do
     u="https://cdn.cocoapods.org/Specs/$a/$b/$c/$p/$v/$p.podspec.json"
     code=$(curl -sL -o spec.json -w "%{http_code}" "$u"); echo "$v -> $code"
     [ "$code" = 200 ] || continue
-    echo "--- $v"; head -c 2500 spec.json; echo
+    echo "--- $v"; python3 -c "import json;d=json.load(open(\"spec.json\"));d.pop(\"authors\",None);d.pop(\"description\",None);print(json.dumps(d,indent=1)[:3000])"
   done
 done
+echo "=== tailles"
+for u in $(python3 - <<'P'
+import json,glob
+P
+); do :; done
