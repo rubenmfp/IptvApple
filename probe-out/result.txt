@@ -1,371 +1,40 @@
-+ cd /Users/runner/work/_temp
-+ curl -sL -o m.tar.xz https://download.videolan.org/pub/cocoapods/prod/MobileVLCKit-3.0-20260922-1512.tar.xz
-+ curl -sL -o t.tar.xz https://download.videolan.org/cocoapods/prod/TVVLCKit-3.0-20260930-0854.tar.xz
-+ ls -la m.tar.xz t.tar.xz
--rw-r--r--  1 runner  staff  232899504 Oct 24 01:02 m.tar.xz
--rw-r--r--  1 runner  staff  131106372 Oct 24 01:02 t.tar.xz
-+ shasum -a 256 m.tar.xz t.tar.xz
-c649c4c47bd065b3a5511746361b5a9066a34033f2df9cbc9454409c0f363b52  m.tar.xz
-07892cae8e59e95a23f1fcf11692f802eae106312aa5ad9782faa2556b2d65d5  t.tar.xz
-+ mkdir m t
-+ tar xf m.tar.xz -C m
-+ tar xf t.tar.xz -C t
-+ find m t -maxdepth 4
-+ head -60
-m
-m/MobileVLCKit-binary
-m/MobileVLCKit-binary/COPYING.txt
-m/MobileVLCKit-binary/NEWS.txt
-m/MobileVLCKit-binary/MobileVLCKit.xcframework
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/dSYMs
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/dSYMs
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/Info.plist
-m/MobileVLCKit-binary/Sample Code
-m/MobileVLCKit-binary/Sample Code/VLCThumbnailer
-m/MobileVLCKit-binary/Sample Code/VLCThumbnailer/VLCThumbnailer
-m/MobileVLCKit-binary/Sample Code/VLCThumbnailer/VLCThumbnailer.xcodeproj
-m/MobileVLCKit-binary/Sample Code/VLCThumbnailer/VLCThumbnailer.xcworkspace
-m/MobileVLCKit-binary/Sample Code/VLCMetadataParser
-m/MobileVLCKit-binary/Sample Code/VLCMetadataParser/VLCMetadataParser.xcworkspace
-m/MobileVLCKit-binary/Sample Code/VLCMetadataParser/VLCMetadataParser
-m/MobileVLCKit-binary/Sample Code/VLCMetadataParser/VLCMetadataParser.xcodeproj
-m/MobileVLCKit-binary/Sample Code/DropIn-Player
-m/MobileVLCKit-binary/Sample Code/DropIn-Player/VDLMainViewController.xib
-m/MobileVLCKit-binary/Sample Code/DropIn-Player/Dropin-Player
-m/MobileVLCKit-binary/Sample Code/DropIn-Player/VDLMainViewController.m
-m/MobileVLCKit-binary/Sample Code/DropIn-Player/Dropin-Player.xcworkspace
-m/MobileVLCKit-binary/Sample Code/DropIn-Player/Dropin-Player.xcodeproj
-m/MobileVLCKit-binary/Sample Code/DropIn-Player/VDLMainViewController.h
-m/MobileVLCKit-binary/Sample Code/SwiftSimplePlayback
-m/MobileVLCKit-binary/Sample Code/SwiftSimplePlayback/SwiftSimplePlayback.xcworkspace
-m/MobileVLCKit-binary/Sample Code/SwiftSimplePlayback/SwiftSimplePlayback.xcodeproj
-m/MobileVLCKit-binary/Sample Code/SwiftSimplePlayback/SwiftSimplePlayback
-m/MobileVLCKit-binary/Sample Code/SwiftSimplePlayback/Podfile
-m/MobileVLCKit-binary/Sample Code/SwiftSimplePlayback/Podfile.lock
-m/MobileVLCKit-binary/Sample Code/GLEssentials
-m/MobileVLCKit-binary/Sample Code/GLEssentials/GLEssentials
-m/MobileVLCKit-binary/Sample Code/GLEssentials/GLEssentials.xcworkspace
-m/MobileVLCKit-binary/Sample Code/GLEssentials/LICENSE.txt
-m/MobileVLCKit-binary/Sample Code/GLEssentials/GLEssentials.xcodeproj
-m/MobileVLCKit-binary/Sample Code/SimplePlayback
-m/MobileVLCKit-binary/Sample Code/SimplePlayback/SimplePlayback
-m/MobileVLCKit-binary/Sample Code/SimplePlayback/SimplePlayback.xcodeproj
-m/MobileVLCKit-binary/doc
-m/MobileVLCKit-binary/doc/html
-m/MobileVLCKit-binary/doc/html/functions_m.html
-m/MobileVLCKit-binary/doc/html/interface_v_l_c_time.png
-m/MobileVLCKit-binary/doc/html/interface_v_l_c_renderer_discoverer_description.html
-m/MobileVLCKit-binary/doc/html/interface_v_l_c_media_player.png
-m/MobileVLCKit-binary/doc/html/splitbar.png
-m/MobileVLCKit-binary/doc/html/class_v_l_c_library-members.html
-m/MobileVLCKit-binary/doc/html/_v_l_c_stream_session_8h_source.html
-m/MobileVLCKit-binary/doc/html/class_v_l_c_audio-members.html
-m/MobileVLCKit-binary/doc/html/_v_l_c_media_list_8h_source.html
-m/MobileVLCKit-binary/doc/html/protocol_v_l_c_media_list_delegate-p-members.html
-m/MobileVLCKit-binary/doc/html/_mobile_v_l_c_kit_8h_source.html
-m/MobileVLCKit-binary/doc/html/interface_v_l_c_media_player.html
-m/MobileVLCKit-binary/doc/html/interface_v_l_c_transcoder-members.html
-m/MobileVLCKit-binary/doc/html/_v_l_c_video_layer_8h_source.html
-m/MobileVLCKit-binary/doc/html/interface_v_l_c_renderer_discoverer_description-members.html
-m/MobileVLCKit-binary/doc/html/doxygen.css
-find: stdout: Broken pipe
-+ du -sh m t
-1.0G	m
-616M	t
-+ for x in m t
-++ find m -name '*.xcframework' -maxdepth 3
-++ head -1
-+ fw=m/MobileVLCKit-binary/MobileVLCKit.xcframework
-+ echo '== m/MobileVLCKit-binary/MobileVLCKit.xcframework'
-== m/MobileVLCKit-binary/MobileVLCKit.xcframework
-+ plutil -p m/MobileVLCKit-binary/MobileVLCKit.xcframework/Info.plist
-+ head -60
-{
-  "AvailableLibraries" => [
-    0 => {
-      "DebugSymbolsPath" => "dSYMs"
-      "LibraryIdentifier" => "ios-arm64_armv7_armv7s"
-      "LibraryPath" => "MobileVLCKit.framework"
-      "SupportedArchitectures" => [
-        0 => "arm64"
-        1 => "armv7"
-        2 => "armv7s"
-      ]
-      "SupportedPlatform" => "ios"
-    }
-    1 => {
-      "DebugSymbolsPath" => "dSYMs"
-      "LibraryIdentifier" => "ios-arm64_x86_64-simulator"
-      "LibraryPath" => "MobileVLCKit.framework"
-      "SupportedArchitectures" => [
-        0 => "arm64"
-        1 => "x86_64"
-      ]
-      "SupportedPlatform" => "ios"
-      "SupportedPlatformVariant" => "simulator"
-    }
-  ]
-  "CFBundlePackageType" => "XFWK"
-  "XCFrameworkFormatVersion" => "1.0"
-}
-++ find m/MobileVLCKit-binary/MobileVLCKit.xcframework -maxdepth 3 -name '*.framework'
-+ for b in '$(find $fw -maxdepth 3 -name "*.framework")'
-++ basename m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework .framework
-+ n=MobileVLCKit
-+ echo '-- m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework'
--- m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework
-+ file m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework/MobileVLCKit
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework/MobileVLCKit: Mach-O universal binary with 3 architectures: [arm_v7:Mach-O dynamically linked shared library arm_v7] [arm_v7s] [arm64]
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework/MobileVLCKit (for architecture armv7):	Mach-O dynamically linked shared library arm_v7
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework/MobileVLCKit (for architecture armv7s):	Mach-O dynamically linked shared library arm_v7s
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework/MobileVLCKit (for architecture arm64):	Mach-O 64-bit dynamically linked shared library arm64
-+ ls m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework
-Headers
-Info.plist
-MobileVLCKit
-Modules
-PrivateHeaders
-+ ls m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework/Modules
-module.modulemap
-+ cat m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework/Modules/module.modulemap
-framework module MobileVLCKit {
-  umbrella header "MobileVLCKit.h"
-
-  exclude header "vlc/libvlc_dialog.h"
-  exclude header "vlc/libvlc_renderer_discoverer.h"
-  exclude header "vlc/libvlc_media.h"
-  exclude header "vlc/libvlc_media_list_player.h"
-  exclude header "vlc/libvlc_media_player.h"
-  exclude header "vlc/libvlc_events.h"
-  exclude header "vlc/vlc.h"
-  exclude header "vlc/libvlc_media_discoverer.h"
-  exclude header "vlc/deprecated.h"
-  exclude header "vlc/libvlc.h"
-  exclude header "vlc/libvlc_media_list.h"
-  exclude header "vlc/libvlc_version.h"
-  exclude header "vlc/libvlc_vlm.h"
-  exclude header "vlc/libvlc_picture.h"
-  exclude header "vlc/libvlc_media_library.h"
-
-  export *
-  module * { export * }
-}
-+ lipo -info m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework/MobileVLCKit
-Architectures in the fat file: m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework/MobileVLCKit are: armv7 armv7s arm64 
-+ otool -l m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_armv7_armv7s/MobileVLCKit.framework/MobileVLCKit
-+ grep -A4 -m2 'LC_BUILD_VERSION\|LC_VERSION_MIN'
-+ head -12
-      cmd LC_VERSION_MIN_IPHONEOS
-  cmdsize 16
-  version 9.0
-      sdk 15.4
-Load command 9
---
-      cmd LC_VERSION_MIN_IPHONEOS
-  cmdsize 16
-  version 9.0
-      sdk 15.4
-Load command 9
-+ for b in '$(find $fw -maxdepth 3 -name "*.framework")'
-++ basename m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework .framework
-+ n=MobileVLCKit
-+ echo '-- m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework'
--- m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework
-+ file m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework/MobileVLCKit
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework/MobileVLCKit: Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit dynamically linked shared library x86_64] [arm64]
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework/MobileVLCKit (for architecture x86_64):	Mach-O 64-bit dynamically linked shared library x86_64
-m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework/MobileVLCKit (for architecture arm64):	Mach-O 64-bit dynamically linked shared library arm64
-+ ls m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework
-Headers
-Info.plist
-MobileVLCKit
-Modules
-PrivateHeaders
-_CodeSignature
-+ ls m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework/Modules
-module.modulemap
-+ cat m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework/Modules/module.modulemap
-framework module MobileVLCKit {
-  umbrella header "MobileVLCKit.h"
-
-  exclude header "vlc/libvlc_dialog.h"
-  exclude header "vlc/libvlc_renderer_discoverer.h"
-  exclude header "vlc/libvlc_media.h"
-  exclude header "vlc/libvlc_media_list_player.h"
-  exclude header "vlc/libvlc_media_player.h"
-  exclude header "vlc/libvlc_events.h"
-  exclude header "vlc/vlc.h"
-  exclude header "vlc/libvlc_media_discoverer.h"
-  exclude header "vlc/deprecated.h"
-  exclude header "vlc/libvlc.h"
-  exclude header "vlc/libvlc_media_list.h"
-  exclude header "vlc/libvlc_version.h"
-  exclude header "vlc/libvlc_vlm.h"
-  exclude header "vlc/libvlc_picture.h"
-  exclude header "vlc/libvlc_media_library.h"
-
-  export *
-  module * { export * }
-}
-+ lipo -info m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework/MobileVLCKit
-Architectures in the fat file: m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework/MobileVLCKit are: x86_64 arm64 
-+ otool -l m/MobileVLCKit-binary/MobileVLCKit.xcframework/ios-arm64_x86_64-simulator/MobileVLCKit.framework/MobileVLCKit
-+ grep -A4 -m2 'LC_BUILD_VERSION\|LC_VERSION_MIN'
-+ head -12
-      cmd LC_VERSION_MIN_IPHONEOS
-  cmdsize 16
-  version 9.0
-      sdk 15.4
-Load command 9
---
-      cmd LC_BUILD_VERSION
-  cmdsize 32
- platform 7
-    minos 14.0
-      sdk 15.4
-+ for x in m t
-++ find t -name '*.xcframework' -maxdepth 3
-++ head -1
-+ fw=t/TVVLCKit-binary/TVVLCKit.xcframework
-+ echo '== t/TVVLCKit-binary/TVVLCKit.xcframework'
-== t/TVVLCKit-binary/TVVLCKit.xcframework
-+ head -60
-+ plutil -p t/TVVLCKit-binary/TVVLCKit.xcframework/Info.plist
-{
-  "AvailableLibraries" => [
-    0 => {
-      "BinaryPath" => "TVVLCKit.framework/TVVLCKit"
-      "DebugSymbolsPath" => "dSYMs"
+t
+t/TVVLCKit-binary
+t/TVVLCKit-binary/COPYING.txt
+t/TVVLCKit-binary/NEWS.txt
+t/TVVLCKit-binary/doc
+t/TVVLCKit-binary/TVVLCKit.xcframework
+t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64
+t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator
+t/TVVLCKit-binary/TVVLCKit.xcframework/Info.plist
       "LibraryIdentifier" => "tvos-arm64"
       "LibraryPath" => "TVVLCKit.framework"
-      "SupportedArchitectures" => [
-        0 => "arm64"
-      ]
-      "SupportedPlatform" => "tvos"
-    }
-    1 => {
-      "BinaryPath" => "TVVLCKit.framework/TVVLCKit"
-      "DebugSymbolsPath" => "dSYMs"
       "LibraryIdentifier" => "tvos-arm64_x86_64-simulator"
       "LibraryPath" => "TVVLCKit.framework"
-      "SupportedArchitectures" => [
-        0 => "arm64"
-        1 => "x86_64"
-      ]
-      "SupportedPlatform" => "tvos"
-      "SupportedPlatformVariant" => "simulator"
-    }
-  ]
-  "CFBundlePackageType" => "XFWK"
-  "XCFrameworkFormatVersion" => "1.0"
-}
-++ find t/TVVLCKit-binary/TVVLCKit.xcframework -maxdepth 3 -name '*.framework'
-+ for b in '$(find $fw -maxdepth 3 -name "*.framework")'
-++ basename t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework .framework
-+ n=TVVLCKit
-+ echo '-- t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework'
--- t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework
-+ file t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/TVVLCKit
 t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/TVVLCKit: Mach-O 64-bit dynamically linked shared library arm64
-+ ls t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework
 Headers
 Info.plist
 Modules
 PrivateHeaders
 TVVLCKit
-+ ls t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/Modules
-module.modulemap
-+ cat t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/Modules/module.modulemap
-framework module TVVLCKit {
-  umbrella header "TVVLCKit.h"
-
-  exclude header "vlc/libvlc_dialog.h"
-  exclude header "vlc/libvlc_renderer_discoverer.h"
-  exclude header "vlc/libvlc_media.h"
-  exclude header "vlc/libvlc_media_list_player.h"
-  exclude header "vlc/libvlc_media_player.h"
-  exclude header "vlc/libvlc_events.h"
-  exclude header "vlc/vlc.h"
-  exclude header "vlc/libvlc_media_discoverer.h"
-  exclude header "vlc/deprecated.h"
-  exclude header "vlc/libvlc.h"
-  exclude header "vlc/libvlc_media_list.h"
-  exclude header "vlc/libvlc_version.h"
-  exclude header "vlc/libvlc_vlm.h"
-  exclude header "vlc/libvlc_picture.h"
-  exclude header "vlc/libvlc_media_library.h"
-
-  export *
-  module * { export * }
-}
-+ lipo -info t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/TVVLCKit
-Non-fat file: t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/TVVLCKit is architecture: arm64
-+ otool -l t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/TVVLCKit
-+ grep -A4 -m2 'LC_BUILD_VERSION\|LC_VERSION_MIN'
-+ head -12
-      cmd LC_VERSION_MIN_TVOS
-  cmdsize 16
-  version 10.2
-      sdk 26.2
-Load command 9
-+ for b in '$(find $fw -maxdepth 3 -name "*.framework")'
-++ basename t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework .framework
-+ n=TVVLCKit
-+ echo '-- t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework'
--- t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework
-+ file t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/TVVLCKit
 t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/TVVLCKit: Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit dynamically linked shared library x86_64] [arm64]
 t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/TVVLCKit (for architecture x86_64):	Mach-O 64-bit dynamically linked shared library x86_64
 t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/TVVLCKit (for architecture arm64):	Mach-O 64-bit dynamically linked shared library arm64
-+ ls t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework
 Headers
 Info.plist
 Modules
 PrivateHeaders
 TVVLCKit
 _CodeSignature
-+ ls t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/Modules
-module.modulemap
-+ cat t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/Modules/module.modulemap
-framework module TVVLCKit {
-  umbrella header "TVVLCKit.h"
-
-  exclude header "vlc/libvlc_dialog.h"
-  exclude header "vlc/libvlc_renderer_discoverer.h"
-  exclude header "vlc/libvlc_media.h"
-  exclude header "vlc/libvlc_media_list_player.h"
-  exclude header "vlc/libvlc_media_player.h"
-  exclude header "vlc/libvlc_events.h"
-  exclude header "vlc/vlc.h"
-  exclude header "vlc/libvlc_media_discoverer.h"
-  exclude header "vlc/deprecated.h"
-  exclude header "vlc/libvlc.h"
-  exclude header "vlc/libvlc_media_list.h"
-  exclude header "vlc/libvlc_version.h"
-  exclude header "vlc/libvlc_vlm.h"
-  exclude header "vlc/libvlc_picture.h"
-  exclude header "vlc/libvlc_media_library.h"
-
-  export *
-  module * { export * }
-}
-+ lipo -info t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/TVVLCKit
-Architectures in the fat file: t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/TVVLCKit are: x86_64 arm64 
-+ otool -l t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64_x86_64-simulator/TVVLCKit.framework/TVVLCKit
-+ head -12
-+ grep -A4 -m2 'LC_BUILD_VERSION\|LC_VERSION_MIN'
-      cmd LC_VERSION_MIN_TVOS
-  cmdsize 16
-  version 10.2
-      sdk 26.2
-Load command 9
---
-      cmd LC_BUILD_VERSION
-  cmdsize 32
- platform 8
-    minos 14.0
-      sdk 26.2
+HEADERS t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/PrivateHeaders
+VLCCustomDialogProvider.h
+VLCEmbeddedDialogProvider.h
+VLCEventsHandler.h
+VLCFilter+Internal.h
+VLCHelperCode.h
+VLCLibVLCBridging.h
+VLCMediaPlayer+Internal.h
+VLCiOSLegacyDialogProvider.h
+grep: t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/PrivateHeaders/VLCMediaPlayer.h: No such file or directory
+grep: t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/PrivateHeaders/VLCMedia.h: No such file or directory
+grep: t/TVVLCKit-binary/TVVLCKit.xcframework/tvos-arm64/TVVLCKit.framework/PrivateHeaders/VLCTime.h: No such file or directory
