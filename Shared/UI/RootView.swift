@@ -128,7 +128,7 @@ struct TopInfo: View {
     var body: some View {
         HStack(spacing: Theme.tv ? 22 : 10) {
             ProfileAvatar(profile: model.profile, size: Theme.tv ? 58 : 30, circle: true)
-            TimelineView(.everyMinute) { ctx in
+            SwiftUI.TimelineView(.everyMinute) { ctx in
                 VStack(alignment: .leading, spacing: 0) {
                     Text(Self.time.string(from: ctx.date))
                         .font(.system(size: Theme.tv ? 38 : 18, weight: .bold))
