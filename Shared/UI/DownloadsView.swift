@@ -113,6 +113,18 @@ struct PlusView: View {
     var body: some View {
         NavigationStack {
             List {
+                Button { model.pickingProfile = true } label: {
+                    HStack(spacing: 14) {
+                        ProfileAvatar(profile: model.profile, size: 46)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(model.profile.name).font(.headline).foregroundStyle(.white)
+                            Text(model.profiles.count > 1 ? "Changer de profil" : "Ajouter un profil").font(.footnote).foregroundStyle(Theme.dim)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.dim)
+                    }
+                    .padding(.vertical, 4)
+                }
                 NavigationLink {
                     SearchView()
                 } label: {

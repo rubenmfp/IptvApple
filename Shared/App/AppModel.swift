@@ -563,6 +563,44 @@ final class AppModel: ObservableObject {
         accentUsed = Self.accentSig
     }
 
+    // ---------- profils ----------
+    /// « Qui regarde ? » au lancement dès qu'il y a plusieurs profils.
+    @Published var pickingProfile = Profiles.all.count > 1
+    @Published private(set) var profile = Profiles.current
+    @Published private(set) var profiles = Profiles.all
+
+    func selectProfile(_ id: String) {
+        Profiles.select(id)
+        profile = Profiles.current
+        pickingProfile = false
+        // tout ce qui dépend du profil est relu : séries suivies, couleur, catégories masquées, rangées
+        follows = Store.follows
+        accentUsed = Self.accentSig
+        appearance += 1
+        if Store.hiddenCats != hiddenUsed { setHidden(Store.hiddenCats, save: false) }
+        progressChanged()
+    }
+
+    @discardableResult
+    func addProfile(name: String, color: Int) -> Profile? {
+        let p = Profiles.add(name: name, color: color)
+        profiles = Profiles.all
+        return p
+    }
+
+    func updateProfile(_ p: Profile) {
+        Profiles.update(p)
+        profiles = Profiles.all
+        if p.id == profile.id { profile = p }
+    }
+
+    func deleteProfile(_ id: String) {
+        let wasCurrent = id == profile.id
+        Profiles.delete(id)
+        profiles = Profiles.all
+        if wasCurrent { selectProfile(Profiles.mainId) }
+    }
+
     // ---------- synchronisation Wi-Fi (avec la TV Android et les autres appareils Apple) ----------
     private var hiddenUsed: Set<String> = []
     private var accentUsed = AppModel.accentSig
@@ -809,6 +847,9 @@ final class AppModel: ObservableObject {
     func logout() {
         LanSync.shared.stop()
         Keychain.delete()
+        Profiles.removeAll()
+        profiles = Profiles.all
+        profile = Profiles.current
         Store.reset()
         live = []
         liveRows = []

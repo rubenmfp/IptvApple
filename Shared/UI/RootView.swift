@@ -8,7 +8,8 @@ struct RootView: View {
             switch model.phase {
             case .starting: Theme.bg.ignoresSafeArea()
             case .login: LoginView()
-            case .ready: MainTabs()
+            case .ready:
+                if model.pickingProfile { ProfilePickerView() } else { MainTabs() }
             }
         }
         .background(Theme.bg.ignoresSafeArea())

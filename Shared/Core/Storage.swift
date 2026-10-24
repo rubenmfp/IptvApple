@@ -62,14 +62,14 @@ enum Files {
 enum Prefs {
     /// Rotation pendant la lecture sur iPhone : 0 = paysage (défaut), 1 = suit le téléphone, 2 = portrait.
     static var rotation: Int {
-        get { UserDefaults.standard.integer(forKey: "rotation") }
-        set { UserDefaults.standard.set(newValue, forKey: "rotation") }
+        get { Store.defaults.integer(forKey: "rotation") }
+        set { Store.defaults.set(newValue, forKey: "rotation") }
     }
 
     /// Format d'image choisi en dernier sur iPhone (vide = « Plein écran »).
     static var aspect: String {
-        get { UserDefaults.standard.string(forKey: "aspect") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "aspect") }
+        get { Store.defaults.string(forKey: "aspect") ?? "" }
+        set { Store.defaults.set(newValue, forKey: "aspect") }
     }
 
     /// Guide des programmes : chargé automatiquement à l'ouverture du Direct ; adresse personnalisée (vide = celle du fournisseur).
@@ -100,12 +100,12 @@ enum Prefs {
 
     /// Rendu sonore du lecteur : 0 = normal, 1 = basses, 2 = dialogues, 3 = cinéma ; + volume amplifié.
     static var fxPreset: Int {
-        get { UserDefaults.standard.integer(forKey: "fxp") }
-        set { UserDefaults.standard.set(newValue, forKey: "fxp") }
+        get { Store.defaults.integer(forKey: "fxp") }
+        set { Store.defaults.set(newValue, forKey: "fxp") }
     }
     static var fxBoost: Bool {
-        get { UserDefaults.standard.bool(forKey: "fxb") }
-        set { UserDefaults.standard.set(newValue, forKey: "fxb") }
+        get { Store.defaults.bool(forKey: "fxb") }
+        set { Store.defaults.set(newValue, forKey: "fxb") }
     }
     /// Diagnostic du lecteur (en bas des réglages) : dernière lecture réussie, dernière erreur.
     static var playerNote: String {

@@ -6,7 +6,11 @@ import Security
 /// Les clés reprennent celles de l'appli Android (« vod:123 », « series:45 », « ep:678 », « live:9 ») pour la synchronisation.
 /// Chaque modification est datée (« stamps ») : entre appareils, la plus récente l'emporte (synchronisation Wi-Fi).
 enum Store {
-    private static let d = UserDefaults.standard
+    /// Données du profil en cours (le profil principal garde les préférences d'origine : rien ne change pour lui).
+    private static var d: UserDefaults { forced ?? Profiles.currentDefaults }
+    static var defaults: UserDefaults { d }
+    /// La synchronisation Wi-Fi travaille toujours sur le profil principal (l'appli Android n'a pas de profils).
+    fileprivate static var forced: UserDefaults?
     /// Prévenu à chaque modification d'une donnée partagée : la synchronisation l'enverra aux autres appareils.
     static let changed = Notification.Name("StoreChanged")
 
@@ -14,7 +18,7 @@ enum Store {
         var s = stamps
         s[syncKey] = Int64(Date().timeIntervalSince1970 * 1000)
         stamps = s
-        NotificationCenter.default.post(name: changed, object: nil)
+        if forced != nil || Profiles.currentId == Profiles.mainId { NotificationCenter.default.post(name: changed, object: nil) }
     }
     /// Clé de donnée partagée -> date de sa dernière modification sur cet appareil (millisecondes).
     fileprivate static var stamps: [String: Int64] {
@@ -207,6 +211,87 @@ enum Store {
     }
 }
 
+// ======================= Profils =======================
+
+/// Un profil : chacun a ses favoris, listes, reprises, notes, séries suivies, catégories masquées, couleur et réglages du lecteur.
+struct Profile: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var color: Int
+}
+
+enum Profiles {
+    static let mainId = "main"
+    static let maxCount = 5
+    private static let std = UserDefaults.standard
+    private static var suites: [String: UserDefaults] = [:]
+    private static let lock = NSLock()
+
+    static var all: [Profile] {
+        get {
+            guard let data = std.data(forKey: "profiles"), let l = try? JSONDecoder().decode([Profile].self, from: data), !l.isEmpty
+            else { return [Profile(id: mainId, name: "Moi", color: 0)] }
+            return l
+        }
+        set { if let data = try? JSONEncoder().encode(newValue) { std.set(data, forKey: "profiles") } }
+    }
+
+    /// Profil en cours (gardé en mémoire : il est consulté à chaque lecture d'une donnée).
+    private(set) static var currentId: String = {
+        let id = UserDefaults.standard.string(forKey: "profile") ?? mainId
+        return id
+    }()
+    static var current: Profile { all.first { $0.id == currentId } ?? all[0] }
+
+    static func select(_ id: String) {
+        currentId = all.contains { $0.id == id } ? id : mainId
+        std.set(currentId, forKey: "profile")
+    }
+
+    static var currentDefaults: UserDefaults { defaults(for: currentId) }
+
+    static func defaults(for id: String) -> UserDefaults {
+        if id == mainId { return std }
+        lock.lock(); defer { lock.unlock() }
+        if let d = suites[id] { return d }
+        let d = UserDefaults(suiteName: "iptvapple.profile." + id) ?? std
+        suites[id] = d
+        return d
+    }
+
+    @discardableResult
+    static func add(name: String, color: Int) -> Profile? {
+        var l = all
+        guard l.count < maxCount else { return nil }
+        let p = Profile(id: String(UUID().uuidString.prefix(8)).lowercased(), name: name.trimmed.isEmpty ? "Profil \(l.count + 1)" : name.trimmed, color: color)
+        l.append(p)
+        all = l
+        return p
+    }
+
+    static func update(_ p: Profile) {
+        var l = all
+        if let i = l.firstIndex(where: { $0.id == p.id }) { l[i] = p } else { return }
+        all = l
+    }
+
+    /// Supprime un profil et ses données (le profil principal ne peut pas l'être).
+    static func delete(_ id: String) {
+        guard id != mainId else { return }
+        all = all.filter { $0.id != id }
+        UserDefaults.standard.removePersistentDomain(forName: "iptvapple.profile." + id)
+        lock.lock(); suites[id] = nil; lock.unlock()
+        if currentId == id { select(mainId) }
+    }
+
+    /// Déconnexion : seul le profil principal reste.
+    static func removeAll() {
+        for p in all where p.id != mainId { delete(p.id) }
+        std.removeObject(forKey: "profiles")
+        select(mainId)
+    }
+}
+
 // ======================= Synchronisation entre appareils (format de l'appli Android) =======================
 
 /// Empreinte du compte (comme sur Android) : deux appareils ne se synchronisent que s'ils utilisent le même compte Xtream.
@@ -279,6 +364,9 @@ extension Store {
 
     /// Toutes les données partagées de cet appareil, avec leur date (1 = antérieure à la synchronisation).
     static func syncRecords() -> [SyncRec] {
+        let saved = forced
+        forced = .standard
+        defer { forced = saved }
         let fav = Set(favs), fw = follows, st = stamps
         var keys = Set(st.keys.filter(syncable))
         keys.formUnion(syncFixed)
@@ -302,6 +390,9 @@ extension Store {
     /// À date égale (données d'avant la synchronisation), une donnée absente ici est ajoutée. Renvoie le nombre de changements.
     @discardableResult
     static func applySync(_ recs: [SyncRec]) -> Int {
+        let saved = forced
+        forced = .standard
+        defer { forced = saved }
         let fav0 = Set(favs)
         var favList = favs
         var fw = follows, fwChanged = false

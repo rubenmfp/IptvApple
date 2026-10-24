@@ -208,6 +208,23 @@ check(Store.seen("ep:5"), true, "donnée d'avant la synchronisation ajoutée")
 check(Store.hiddenCats, ["vod|Adultes", "live|Radio/Musique"], "catégories masquées")
 check(Store.follows["series:4"]?.vid, 4, "série suivie reçue")
 check(Store.applySync(Store.syncRecords()), 0, "renvoyer ses propres données ne change rien")
+
+// ---------- profils ----------
+let kid = Profiles.add(name: "Enfants", color: 3)!
+Profiles.select(kid.id)
+check(Store.pos("vod:1"), 0, "nouveau profil : aucune reprise héritée")
+check(Store.favs, [], "nouveau profil : aucun favori hérité")
+Store.toggleFav("vod:99")
+Store.setProgress("vod:50", pos: 1000, dur: 600_000)
+check(Store.syncRecords().contains { $0.k == "fav|vod:99" }, false, "la synchronisation n'envoie que le profil principal")
+check(Store.syncRecords().contains { $0.k == "fav|vod:7" }, true, "profil principal envoyé même depuis un autre profil")
+Profiles.select(Profiles.mainId)
+check(Store.favs, ["vod:7"], "profil principal intact")
+check(Store.pos("vod:50"), 0, "reprise propre à chaque profil")
+Profiles.delete(kid.id)
+check(Profiles.all.count, 1, "profil supprimé")
+Profiles.select(kid.id)
+check(Profiles.currentId, Profiles.mainId, "profil supprimé : retour au principal")
 Store.reset()
 
 // ---------- lien M3U ----------

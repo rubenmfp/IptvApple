@@ -27,6 +27,19 @@ struct SettingsView: View {
 
     var body: some View {
             Form {
+                Section("Profil") {
+                    HStack(spacing: 16) {
+                        ProfileAvatar(profile: model.profile, size: Theme.tv ? 70 : 44)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(model.profile.name).font(.headline)
+                            Text("Favoris, listes, reprises, notes, couleur et réglages du lecteur propres à ce profil.")
+                                .font(.footnote).foregroundStyle(Theme.dim)
+                        }
+                    }
+                    Button { model.pickingProfile = true } label: {
+                        Label(model.profiles.count > 1 ? "Changer de profil" : "Ajouter ou gérer les profils", systemImage: "person.2")
+                    }
+                }
                 Section("Compte") {
                     if let s = model.status { Text(s.summary) }
                     if let a = model.account { Text("Serveur : \(a.host)").foregroundStyle(Theme.dim) }
@@ -125,7 +138,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.10 : présentation revue (À la une, fiche, étiquettes, catégories).").foregroundStyle(Theme.dim)
+                    Text("Version 0.11 : profils, présentation revue.").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")
