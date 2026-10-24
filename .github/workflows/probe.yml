@@ -2,17 +2,16 @@ name: probe
 on:
   push:
     branches: [probe]
+permissions:
+  contents: write
 jobs:
   probe:
     runs-on: macos-14
     steps:
-      - name: Specs VLCKit
+      - uses: actions/checkout@v5
+      - name: Sonde
         run: |
-          for p in MobileVLCKit TVVLCKit VLCKit; do
-            pod spec cat $p > $p.json 2>/dev/null || pod spec cat $p --regex > $p.json 2>/dev/null || true
-            v=$(grep -m1 '"version"' $p.json; grep -m1 '"http"' $p.json; grep -A4 '"platforms"' $p.json | tr -d '\n ')
-            echo "::notice title=$p::$(echo $v | tr '\n' ' ')"
-          done
-          for p in MobileVLCKit TVVLCKit VLCKit; do
-            echo "::notice title=$p versions::$(ls ~/.cocoapods/repos/trunk/Specs/*/*/*/$p 2>/dev/null | tail -8 | tr '\n' ' ')"
-          done
+          mkdir -p probe-out
+          bash tools/probe.sh > probe-out/result.txt 2>&1 || true
+          git config user.name ci; git config user.email ci@example.com
+          git add probe-out && git commit -m "résultat sonde" && git push
