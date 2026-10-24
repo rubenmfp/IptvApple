@@ -2,7 +2,7 @@
 
 Version Apple (iPhone et Apple TV) de l'appli Android IptvTV : lecteur Xtream Codes sombre, pour un usage privé.
 
-## État (version 0.11)
+## État (version 0.12)
 Reprend les fonctions de l'appli Android IptvTV 0.14 :
 - connexion par identifiants Xtream ou lien M3U ; catalogue enregistré, affiché tout de suite, mis à jour en arrière-plan ;
 - Accueil, Films, Séries : « À la une », tuiles de catégories, rangées, Reprendre, favoris, « Recommandé pour vous »,
@@ -18,7 +18,9 @@ Reprend les fonctions de l'appli Android IptvTV 0.14 :
   double appui à gauche / à droite ;
 - synchronisation par le Wi-Fi avec la TV Android (même protocole : `_iptvtv._tcp`, port 38472, même format de données) ;
 - profils (5 au plus) : chacun ses favoris, listes, reprises, notes, séries suivies, catégories masquées, couleur et
-  réglages du lecteur ; le profil principal garde les données d'origine et c'est lui qui se synchronise avec Android.
+  réglages du lecteur ; tous les profils se synchronisent (protocole décrit dans `docs/SYNC.md`, compatible avec
+  IptvTV 0.14 qui ne reçoit que le profil principal). Apple TV : « Qui regarde ? » à chaque démarrage ;
+  iPhone : le profil choisi est gardé jusqu'à ce qu'on en change.
 
 Non repris : image dans l'image sur iPhone (le lecteur VLC ne le permet pas simplement), choix du décodeur Android
 (sans objet : VLC décode lui-même), présentation TV / téléphone imposée (chaque appareil a sa propre appli).

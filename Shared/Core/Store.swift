@@ -14,11 +14,32 @@ enum Store {
     /// Prévenu à chaque modification d'une donnée partagée : la synchronisation l'enverra aux autres appareils.
     static let changed = Notification.Name("StoreChanged")
 
-    private static func stamp(_ syncKey: String) {
+    fileprivate static func stamp(_ syncKey: String) {
         var s = stamps
         s[syncKey] = Int64(Date().timeIntervalSince1970 * 1000)
         stamps = s
-        if forced != nil || Profiles.currentId == Profiles.mainId { NotificationCenter.default.post(name: changed, object: nil) }
+        NotificationCenter.default.post(name: changed, object: nil)
+    }
+    /// Date d'une donnée commune à tous les profils (liste des profils) : rangée avec celles du profil principal.
+    fileprivate static func stampMain(_ syncKey: String) {
+        let saved = forced
+        forced = .standard
+        defer { forced = saved }
+        stamp(syncKey)
+    }
+    fileprivate static func mainStamps() -> [String: Int64] {
+        let saved = forced
+        forced = .standard
+        defer { forced = saved }
+        return stamps
+    }
+    fileprivate static func setMainStamp(_ k: String, _ t: Int64) {
+        let saved = forced
+        forced = .standard
+        defer { forced = saved }
+        var st = stamps
+        st[k] = t
+        stamps = st
     }
     /// Clé de donnée partagée -> date de sa dernière modification sur cet appareil (millisecondes).
     fileprivate static var stamps: [String: Int64] {
@@ -266,6 +287,7 @@ enum Profiles {
         let p = Profile(id: String(UUID().uuidString.prefix(8)).lowercased(), name: name.trimmed.isEmpty ? "Profil \(l.count + 1)" : name.trimmed, color: color)
         l.append(p)
         all = l
+        Store.stampMain("prof|" + p.id)
         return p
     }
 
@@ -273,10 +295,19 @@ enum Profiles {
         var l = all
         if let i = l.firstIndex(where: { $0.id == p.id }) { l[i] = p } else { return }
         all = l
+        Store.stampMain("prof|" + p.id)
     }
 
-    /// Supprime un profil et ses données (le profil principal ne peut pas l'être).
+    /// Supprime un profil et ses données (le profil principal ne peut pas l'être). La suppression est datée :
+    /// elle est transmise aux autres appareils.
     static func delete(_ id: String) {
+        guard id != mainId else { return }
+        remove(id)
+        Store.stampMain("prof|" + id)
+    }
+
+    /// Suppression locale, sans nouvelle date (déconnexion, suppression reçue d'un autre appareil).
+    fileprivate static func remove(_ id: String) {
         guard id != mainId else { return }
         all = all.filter { $0.id != id }
         UserDefaults.standard.removePersistentDomain(forName: "iptvapple.profile." + id)
@@ -286,9 +317,28 @@ enum Profiles {
 
     /// Déconnexion : seul le profil principal reste.
     static func removeAll() {
-        for p in all where p.id != mainId { delete(p.id) }
+        for p in all where p.id != mainId { remove(p.id) }
         std.removeObject(forKey: "profiles")
         select(mainId)
+    }
+
+    // ---------- synchronisation de la liste des profils ----------
+
+    /// Fiche d'un profil échangée entre appareils : {"name":"…","color":0,"order":0}.
+    static func entryText(_ p: Profile, order: Int) -> String {
+        "{\"name\":" + jsonText(p.name) + ",\"color\":\(p.color),\"order\":\(order)}"
+    }
+
+    static func parseEntry(id: String, _ s: String) -> Profile? {
+        guard let d = s.data(using: .utf8), let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return nil }
+        let name = (o["name"] as? String ?? "").trimmed
+        return Profile(id: id, name: name.isEmpty ? "Profil" : name, color: (o["color"] as? NSNumber)?.intValue ?? 0)
+    }
+
+    fileprivate static func upsert(_ p: Profile) {
+        var l = all
+        if let i = l.firstIndex(where: { $0.id == p.id }) { l[i] = p } else { l.append(p) }
+        all = l
     }
 }
 
@@ -363,10 +413,31 @@ extension Store {
     }
 
     /// Toutes les données partagées de cet appareil, avec leur date (1 = antérieure à la synchronisation).
+    /// Toutes les données partagées : celles du profil principal (clés d'origine, comprises par IptvTV 0.14),
+    /// la liste des profils (« prof|id ») et les données des autres profils (clés préfixées « @id: »).
     static func syncRecords() -> [SyncRec] {
         let saved = forced
-        forced = .standard
         defer { forced = saved }
+        forced = .standard
+        var out = profileRecords(global: true)
+        let st = mainStamps()
+        let list = Profiles.all
+        var ids = Set(list.map(\.id))
+        for k in st.keys where k.hasPrefix("prof|") { ids.insert(String(k.dropFirst(5))) }
+        for id in ids.sorted() {
+            let v = list.firstIndex { $0.id == id }.map { Profiles.entryText(list[$0], order: $0) }
+            let t = st["prof|" + id] ?? (v != nil ? 1 : 0)
+            if t > 0 || v != nil { out.append(SyncRec(k: "prof|" + id, t: t, v: v)) }
+        }
+        for p in list where p.id != Profiles.mainId {
+            forced = Profiles.defaults(for: p.id)
+            out += profileRecords(global: false).map { SyncRec(k: "@\(p.id):" + $0.k, t: $0.t, v: $0.v) }
+        }
+        return out
+    }
+
+    /// Données du profil désigné par `forced`. `global` : y compris la clé TMDB (commune, rangée avec le profil principal).
+    private static func profileRecords(global: Bool) -> [SyncRec] {
         let fav = Set(favs), fw = follows, st = stamps
         var keys = Set(st.keys.filter(syncable))
         keys.formUnion(syncFixed)
@@ -379,6 +450,7 @@ extension Store {
             else if k.hasPrefix("last_") { keys.insert("last|" + k.dropFirst(5)) }
             else if k.hasPrefix("lq_") { keys.insert("lq|" + k.dropFirst(3)) }
         }
+        if !global { keys.remove("tmdb") }
         return keys.sorted().compactMap { k in
             let v = syncValue(k, favs: fav, fw: fw)
             let t = st[k] ?? (v != nil ? 1 : 0)
@@ -391,14 +463,42 @@ extension Store {
     @discardableResult
     static func applySync(_ recs: [SyncRec]) -> Int {
         let saved = forced
-        forced = .standard
         defer { forced = saved }
+        var n = 0
+        // 1. liste des profils (ajouts, noms, couleurs, suppressions), chaque profil pour lui-même
+        let st = mainStamps()
+        for r in recs where r.k.hasPrefix("prof|") {
+            let id = String(r.k.dropFirst(5))
+            guard !id.isEmpty else { continue }
+            let list = Profiles.all
+            let cur = list.firstIndex { $0.id == id }.map { Profiles.entryText(list[$0], order: $0) }
+            let lt = st[r.k] ?? (cur != nil ? 1 : 0)
+            if r.t < lt || (r.t == lt && (r.v == nil || cur != nil)) { continue }
+            setMainStamp(r.k, r.t)
+            if cur == r.v { continue }
+            if let v = r.v, let e = Profiles.parseEntry(id: id, v) { Profiles.upsert(e) } else if r.v == nil { Profiles.remove(id) }
+            n += 1
+        }
+        // 2. profil principal (clés d'origine), 3. autres profils (clés « @id: »)
+        forced = .standard
+        n += applyProfile(recs.filter { !$0.k.hasPrefix("@") && !$0.k.hasPrefix("prof|") }, global: true)
+        for p in Profiles.all where p.id != Profiles.mainId {
+            let pre = "@\(p.id):"
+            let mine = recs.compactMap { r in r.k.hasPrefix(pre) ? SyncRec(k: String(r.k.dropFirst(pre.count)), t: r.t, v: r.v) : nil }
+            if mine.isEmpty { continue }
+            forced = Profiles.defaults(for: p.id)
+            n += applyProfile(mine, global: false)
+        }
+        return n
+    }
+
+    private static func applyProfile(_ recs: [SyncRec], global: Bool) -> Int {
         let fav0 = Set(favs)
         var favList = favs
         var fw = follows, fwChanged = false
         var st = stamps
         var n = 0
-        for r in recs where syncable(r.k) {
+        for r in recs where syncable(r.k) && (global || r.k != "tmdb") {
             let k = r.k
             let cur = syncValue(k, favs: fav0, fw: fw)
             let lt = st[k] ?? (cur != nil ? 1 : 0)

@@ -564,8 +564,13 @@ final class AppModel: ObservableObject {
     }
 
     // ---------- profils ----------
-    /// « Qui regarde ? » au lancement dès qu'il y a plusieurs profils.
+    /// « Qui regarde ? » : sur l'Apple TV, à chaque démarrage dès qu'il y a plusieurs profils ;
+    /// sur l'iPhone, le profil choisi est gardé jusqu'à ce qu'on en change dans les réglages.
+    #if os(tvOS)
     @Published var pickingProfile = Profiles.all.count > 1
+    #else
+    @Published var pickingProfile = false
+    #endif
     @Published private(set) var profile = Profiles.current
     @Published private(set) var profiles = Profiles.all
 
@@ -615,6 +620,10 @@ final class AppModel: ObservableObject {
 
     /// Données reçues d'un autre appareil : l'appli relit tout ce qui est partagé.
     func syncApplied() {
+        let before = profile
+        profiles = Profiles.all
+        profile = Profiles.current
+        if profile.id != before.id { selectProfile(profile.id); return }      // profil en cours supprimé ailleurs
         follows = Store.follows
         if Self.accentSig != accentUsed { accentUsed = Self.accentSig; appearance += 1 }
         if Store.hiddenCats != hiddenUsed { setHidden(Store.hiddenCats, save: false) }

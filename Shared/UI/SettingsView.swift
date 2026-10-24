@@ -119,7 +119,8 @@ struct SettingsView: View {
                         }
                         if !sync.info.isEmpty { Text(sync.info).font(.footnote).foregroundStyle(Theme.dim) }
                     }
-                    Text("Reprise de lecture, vus, favoris, listes, notes, séries suivies, catégories masquées, couleur et clé TMDB "
+                    Text("Profils, et pour chacun reprise de lecture, vus, favoris, listes, notes, séries suivies, catégories masquées et couleur, "
+                         + "plus la clé TMDB, "
                          + "passent d'un appareil à l'autre (TV Android comprise) quand l'appli est ouverte sur le même Wi-Fi, avec le même compte. "
                          + "Pour chaque donnée, la modification la plus récente l'emporte. Les identifiants ne sont jamais envoyés.")
                         .font(.footnote).foregroundStyle(Theme.dim)
@@ -138,7 +139,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.11 : profils, présentation revue.").foregroundStyle(Theme.dim)
+                    Text("Version 0.12 : profils synchronisés avec la TV Android (quand elle les gérera).").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")

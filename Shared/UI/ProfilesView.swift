@@ -181,7 +181,7 @@ struct ProfileEditor: View {
                     }
                 }
                 if draft.profile.id == Profiles.mainId {
-                    Text("Profil principal : c'est lui qui se synchronise avec la TV Android.")
+                    Text("Profil principal : il ne peut pas être supprimé.")
                         .font(.footnote).foregroundStyle(Theme.dim)
                 }
             }

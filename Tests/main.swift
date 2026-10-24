@@ -216,8 +216,12 @@ check(Store.pos("vod:1"), 0, "nouveau profil : aucune reprise héritée")
 check(Store.favs, [], "nouveau profil : aucun favori hérité")
 Store.toggleFav("vod:99")
 Store.setProgress("vod:50", pos: 1000, dur: 600_000)
-check(Store.syncRecords().contains { $0.k == "fav|vod:99" }, false, "la synchronisation n'envoie que le profil principal")
-check(Store.syncRecords().contains { $0.k == "fav|vod:7" }, true, "profil principal envoyé même depuis un autre profil")
+let all1 = Store.syncRecords()
+check(all1.contains { $0.k == "fav|vod:99" }, false, "favori d'un profil : pas avec les clés du profil principal")
+check(all1.contains { $0.k == "@\(kid.id):fav|vod:99" }, true, "favori d'un profil : clé préfixée « @id: »")
+check(all1.first { $0.k == "prof|\(kid.id)" }?.v, #"{"name":"Enfants","color":3,"order":1}"#, "fiche du profil")
+check(all1.contains { $0.k == "fav|vod:7" }, true, "profil principal envoyé même depuis un autre profil")
+check(all1.contains { $0.k == "@\(kid.id):tmdb" }, false, "clé TMDB seulement avec le profil principal")
 Profiles.select(Profiles.mainId)
 check(Store.favs, ["vod:7"], "profil principal intact")
 check(Store.pos("vod:50"), 0, "reprise propre à chaque profil")
@@ -225,6 +229,25 @@ Profiles.delete(kid.id)
 check(Profiles.all.count, 1, "profil supprimé")
 Profiles.select(kid.id)
 check(Profiles.currentId, Profiles.mainId, "profil supprimé : retour au principal")
+// la suppression, plus récente, l'emporte sur les anciennes données de ce profil
+Store.applySync(all1)
+check(Profiles.all.contains { $0.id == kid.id }, false, "profil supprimé : pas recréé par d'anciennes données")
+check(Store.syncRecords().contains { $0.k == "prof|\(kid.id)" && $0.v == nil }, true, "suppression transmise")
+// un profil créé sur un autre appareil arrive avec ses données
+let far: Int64 = 9_999_999_999_999
+check(Store.applySync([SyncRec(k: "prof|ab12cd34", t: far, v: #"{"name":"Léa","color":5,"order":1}"#),
+                       SyncRec(k: "@ab12cd34:fav|series:8", t: far, v: "1"),
+                       SyncRec(k: "@ab12cd34:pos|ep:3", t: far, v: "5000;60000"),
+                       SyncRec(k: "@inconnu:fav|vod:1", t: far, v: "1")]), 3, "profil reçu")
+check(Profiles.all.first { $0.id == "ab12cd34" }?.name, "Léa", "nom du profil reçu")
+check(Store.favs.contains("series:8"), false, "données du profil reçu : pas dans le principal")
+Profiles.select("ab12cd34")
+check(Store.favs, ["series:8"], "données du profil reçu")
+check(Store.pos("ep:3"), 5000, "reprise du profil reçu")
+Profiles.select(Profiles.mainId)
+Store.applySync([SyncRec(k: "prof|ab12cd34", t: far + 1, v: nil)])
+check(Profiles.all.count, 1, "suppression reçue")
+check(Profiles.defaults(for: "ab12cd34").stringArray(forKey: "favs") ?? [], [], "données du profil supprimé effacées")
 Store.reset()
 
 // ---------- lien M3U ----------
