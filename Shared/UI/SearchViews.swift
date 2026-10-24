@@ -47,6 +47,12 @@ struct SearchView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.tv ? 30 : 16) {
+                TopMarker()
+                #if os(tvOS)
+                // Apple TV : clavier AZERTY à l'écran, résultats dessous mis à jour au fil des lettres
+                TVKeyboard(text: $text, placeholder: "Titre, acteur, réalisateur…")
+                    .padding(.horizontal, 80)
+                #else
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass").foregroundStyle(Theme.dim)
                     TextField("Titre, acteur, réalisateur…", text: $text)
@@ -62,11 +68,10 @@ struct SearchView: View {
                     if closable { Button("Fermer") { dismiss() } }
                     #endif
                 }
-                .padding(Theme.tv ? 0 : 12)
-                #if os(iOS)
+                .padding(12)
                 .background(Theme.panel, in: RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, Theme.edge)
                 #endif
-                .padding(.horizontal, Theme.tv ? 80 : Theme.edge)
 
                 if searching || (text.trimmed.count >= 2 && text != term) {
                     HStack(spacing: 10) { ProgressView(); Text("Recherche…").foregroundStyle(Theme.dim) }
@@ -87,9 +92,9 @@ struct SearchView: View {
         }
         .background(Theme.bg.ignoresSafeArea())
         .task(id: text) {
-            // 2 secondes après la dernière lettre
+            // iPhone : 2 secondes après la dernière lettre ; Apple TV : presque tout de suite (une lettre à la fois)
             guard text.trimmed.count >= 2 else { if text.isEmpty { term = "" }; return }
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(nanoseconds: Theme.tv ? 700_000_000 : 2_000_000_000)
             if !Task.isCancelled { term = text }
         }
         .task(id: term) {
@@ -97,7 +102,9 @@ struct SearchView: View {
             rows = await model.search(term)
             searching = false
         }
+        #if os(iOS)
         .onAppear { if text.isEmpty { fieldFocused = true } }
+        #endif
         .itemDetail($selected)
     }
 }
@@ -150,6 +157,7 @@ struct ListsView: View {
         let rows = model.listRows()
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.tv ? 30 : 18) {
+                TopMarker()
                 if rows.isEmpty || rows.allSatisfy({ $0.items.isEmpty }) {
                     Text("Aucun favori ni liste pour l'instant. Sur une affiche, un appui long ouvre le menu Favoris / listes.")
                         .foregroundStyle(Theme.dim)
@@ -212,6 +220,7 @@ struct SortiesView: View {
         let followed = model.follows.keys.compactMap { model.derived.byKey[$0] }.sorted { $0.name < $1.name }
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.tv ? 30 : 18) {
+                TopMarker()
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Sorties").font(Theme.tv ? .title2.bold() : .title3.bold()).foregroundStyle(.white)
                     Text("Sur la fiche d'une série, la cloche la met en suivi. Lancer le dernier épisode d'une série la suit d'office. "

@@ -8,12 +8,14 @@ struct LiveView: View {
     @State private var query = ""
     @State private var term = ""
     @State private var picker: Row?
+    @State private var typing = false
     /// Chaîne en plusieurs qualités : choix de la qualité au lancement.
     @State private var asking: PendingLive?
 
     var body: some View {
         ScrollView(.vertical) {
             LazyVStack(alignment: .leading, spacing: Theme.rowGap) {
+                TopMarker()
                 searchField
                 if term.trimmed.count >= 2 {
                     let found = model.searchLive(term)
@@ -48,7 +50,7 @@ struct LiveView: View {
         .onAppear { model.loadLive() }
         .task(id: query) {
             guard query.trimmed.count >= 2 else { term = query; return }
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            try? await Task.sleep(nanoseconds: Theme.tv ? 500_000_000 : 1_200_000_000)
             if !Task.isCancelled { term = query }
         }
         .confirmationDialog(asking?.channel.name ?? "", isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } }),
@@ -75,7 +77,23 @@ struct LiveView: View {
         #endif
     }
 
-    private var searchField: some View {
+    @ViewBuilder private var searchField: some View {
+        #if os(tvOS)
+        // Apple TV : la recherche s'ouvre sur un clavier AZERTY à l'écran, les chaînes trouvées dessous
+        if typing {
+            VStack(alignment: .leading, spacing: 16) {
+                TVKeyboard(text: $query, placeholder: "Rechercher une chaîne")
+                Button("Fermer le clavier") { typing = false }.buttonStyle(PillStyle())
+            }
+            .padding(.horizontal, Theme.edge)
+        } else {
+            Button { typing = true } label: {
+                Label(query.isEmpty ? "Rechercher une chaîne" : "Recherche : \(query)", systemImage: "magnifyingglass")
+            }
+            .buttonStyle(PillStyle())
+            .padding(.horizontal, Theme.edge)
+        }
+        #else
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(Theme.dim)
             TextField("Rechercher une chaîne", text: $query)
@@ -84,11 +102,10 @@ struct LiveView: View {
                 .submitLabel(.search)
                 .onSubmit { term = query }
         }
-        #if os(iOS)
         .padding(12)
         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 10))
-        #endif
         .padding(.horizontal, Theme.edge)
+        #endif
     }
 
     /// Tuiles : Favoris, Récentes, genres, puis catégories du fournisseur.

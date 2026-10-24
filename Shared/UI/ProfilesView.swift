@@ -4,15 +4,17 @@ import SwiftUI
 struct ProfileAvatar: View {
     let profile: Profile
     var size: CGFloat = 60
+    var circle = false
 
     static let palette: [UInt32] = [0xE50914, 0x2196F3, 0x1DB954, 0xFF9800, 0x9C27B0, 0xE91E8C, 0x00ACC1, 0x8D6E63]
     static func color(_ i: Int) -> Color { Accent.rgb(palette[(0..<palette.count).contains(i) ? i : 0]) }
 
     var body: some View {
         let c = Self.color(profile.color)
-        RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
+        let r = circle ? size / 2 : size * 0.2
+        RoundedRectangle(cornerRadius: r, style: .continuous)
             .fill(LinearGradient(colors: [c, c.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .background(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous).fill(.black))
+            .background(RoundedRectangle(cornerRadius: r, style: .continuous).fill(.black))
             .overlay(
                 Text(String(profile.name.trimmed.prefix(1)).uppercased())
                     .font(.system(size: size * 0.46, weight: .heavy, design: .rounded))

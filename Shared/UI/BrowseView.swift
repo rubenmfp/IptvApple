@@ -20,6 +20,7 @@ struct BrowseView: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: Theme.rowGap) {
+                    TopMarker()
                     if !hero.isEmpty {
                         HeroView(items: hero) { selected = Selection(item: $0) }
                     }

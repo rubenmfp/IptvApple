@@ -68,9 +68,11 @@
 		E83D3ECB2066A12531295B25 = {isa = PBXBuildFile; fileRef = 904B9FB7B257D8EC2C57450D /* Epg.swift */; };
 		E83D9C8535780CD6F38AFBFF = {isa = PBXBuildFile; fileRef = 118ED0F0BE3BCA24918EFFB6 /* ProfilesView.swift */; };
 		EDA9734B4BAEF45B85305535 = {isa = PBXBuildFile; fileRef = 719A6D22A33511DF231F0F04 /* Names.swift */; };
+		F6D210F59D8933D16A2D3512 = {isa = PBXBuildFile; fileRef = EBA5EACE961C958580AAE5D3 /* TVKeyboard.swift */; };
 		F743FEAABC962770B97B3B5D = {isa = PBXBuildFile; fileRef = 8D645A824BD508C49FB3EF52 /* Regex.swift */; };
 		FB327891CB3C94B873C04FDD = {isa = PBXBuildFile; fileRef = BCBD276CF82FB70E45A68071 /* Theme.swift */; };
 		FC45E0304408CCE2AD03F2F9 = {isa = PBXBuildFile; fileRef = 719A6D22A33511DF231F0F04 /* Names.swift */; };
+		FD0C8D0EF01D405199E3E337 = {isa = PBXBuildFile; fileRef = EBA5EACE961C958580AAE5D3 /* TVKeyboard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -134,6 +136,7 @@
 		DBC2E8BD4168C6853B9808DE = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Follow.swift; sourceTree = "<group>"; };
 		E2FF77C67FF707E910F9E148 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		E479151C1109C6AF845A4DD0 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		EBA5EACE961C958580AAE5D3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVKeyboard.swift; sourceTree = "<group>"; };
 		EBCB10DBD24ABE6B1E62A7D9 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -248,6 +251,7 @@
 				D43AD9BD33F76E3796E5C826 /* SearchViews.swift */,
 				8822A06E4CEB39F67FB2601B /* SettingsView.swift */,
 				5A167AC28AF0B9CB1D3ECE36 /* Styles.swift */,
+				EBA5EACE961C958580AAE5D3 /* TVKeyboard.swift */,
 				BCBD276CF82FB70E45A68071 /* Theme.swift */,
 			);
 			path = UI;
@@ -392,6 +396,7 @@
 				B33BC8B5FF508279B222D95C /* SearchViews.swift in Sources */,
 				0B50973819B8949CCDEEDDE9 /* SettingsView.swift in Sources */,
 				24CED1E7509D3B283E9CA873 /* Styles.swift in Sources */,
+				F6D210F59D8933D16A2D3512 /* TVKeyboard.swift in Sources */,
 				FB327891CB3C94B873C04FDD /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -428,6 +433,7 @@
 				A6D5DAF50C9D5D9F30B38320 /* SearchViews.swift in Sources */,
 				2FAD89B8B9DAA10974434235 /* SettingsView.swift in Sources */,
 				C71D4D5B3A1C9FA16DB1B852 /* Styles.swift in Sources */,
+				FD0C8D0EF01D405199E3E337 /* TVKeyboard.swift in Sources */,
 				1D9569F3B3390AA3D9C7ACE0 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -441,7 +447,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -451,7 +457,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.14;
+				MARKETING_VERSION = 0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
@@ -469,7 +475,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -479,7 +485,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.14;
+				MARKETING_VERSION = 0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
@@ -496,7 +502,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -511,7 +517,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.14;
+				MARKETING_VERSION = 0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -571,7 +577,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -586,7 +592,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.14;
+				MARKETING_VERSION = 0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

@@ -144,7 +144,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.14 : qualités des chaînes regroupées aussi d’après la catégorie.").foregroundStyle(Theme.dim)
+                    Text("Version 0.15 : clavier AZERTY à l’écran (Apple TV), profil, heure et date en haut.").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")
