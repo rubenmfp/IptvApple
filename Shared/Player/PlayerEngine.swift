@@ -16,9 +16,24 @@ final class VideoHostView: UIView {
         super.layoutSubviews()
         if bounds.size != last {
             last = bounds.size
-            for v in subviews { v.frame = bounds }
+            fit()
             onResize?()
+            // VLC peut repositionner son image un peu après : on recale encore une fois
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.fit() }
         }
+    }
+
+    /// L'image de VLC (vues et calques ajoutés par VLC) occupe toute la surface.
+    func fit() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for v in subviews {
+            v.frame = bounds
+            for l in v.layer.sublayers ?? [] { l.frame = v.bounds }
+        }
+        let viewLayers = Set(subviews.map { ObjectIdentifier($0.layer) })
+        for l in layer.sublayers ?? [] where !viewLayers.contains(ObjectIdentifier(l)) { l.frame = bounds }
+        CATransaction.commit()
     }
 }
 
@@ -36,7 +51,12 @@ final class PlayerEngine: ObservableObject {
         case original = "Original", fill = "Plein écran", stretch = "Étiré", wide = "16/9", classic = "4/3"
     }
 
+    #if os(tvOS)
     let player = VLCMediaPlayer()
+    #else
+    /// iPhone : sous-titres plus petits (taille relative à la hauteur de l'image : 20 = petit, 16 = normal).
+    let player = VLCMediaPlayer(options: ["--freetype-rel-fontsize=20"])
+    #endif
     let videoView: VideoHostView = {
         let v = VideoHostView()
         v.backgroundColor = .black
@@ -133,6 +153,7 @@ final class PlayerEngine: ObservableObject {
                     player.time = VLCTime(int: Int32(clamping: startAtMs))
                     startAtMs = 0
                 }
+                startedAt = Date()
                 setPhase(.playing)
                 return
             }
@@ -145,6 +166,7 @@ final class PlayerEngine: ObservableObject {
             }
             return
         }
+        refreshSubtitles()
         switch st {
         case .paused: setPhase(.paused)
         case .ended: setPhase(.ended)
@@ -203,6 +225,7 @@ final class PlayerEngine: ObservableObject {
         let target = min(max(0, timeMs + seconds * 1000), max(0, durationMs - 2000))
         player.time = VLCTime(int: Int32(clamping: target))
         clock.set(time: target)
+        if seconds < 0 { showSubtitlesBriefly() }
     }
 
     func seek(toFraction f: Double) {
@@ -218,11 +241,50 @@ final class PlayerEngine: ObservableObject {
 
     // pistes : index VLC et nom (-1 = désactivé pour les sous-titres)
     var audioTracks: [Track] { pairs(player.audioTrackIndexes, player.audioTrackNames) }
-    var subtitleTracks: [Track] { pairs(player.videoSubTitlesIndexes, player.videoSubTitlesNames) }
+    /// Liste gardée en mémoire : une fois les sous-titres désactivés, VLC ne la redonne pas toujours en entier.
+    private var knownSubs: [Track] = []
+    var subtitleTracks: [Track] {
+        let now = pairs(player.videoSubTitlesIndexes, player.videoSubTitlesNames)
+        if now.count > knownSubs.count { knownSubs = now }
+        return knownSubs.isEmpty ? now : knownSubs
+    }
     var currentAudio: Int32 { player.currentAudioTrackIndex }
     var currentSubtitle: Int32 { player.currentVideoSubTitleIndex }
     func setAudio(_ i: Int32) { player.currentAudioTrackIndex = i; objectWillChange.send() }
-    func setSubtitle(_ i: Int32) { player.currentVideoSubTitleIndex = i; objectWillChange.send() }
+
+    /// Choix de l'utilisateur : il prime sur la désactivation par défaut et sur l'affichage temporaire.
+    func setSubtitle(_ i: Int32) {
+        userSubtitle = i
+        tempSubtitleUntil = nil
+        player.currentVideoSubTitleIndex = i
+        objectWillChange.send()
+    }
+
+    private var startedAt: Date?
+    private var userSubtitle: Int32?
+    private var tempSubtitleUntil: Date?
+
+    /// Sous-titres désactivés au départ (VLC active d'office ceux marqués « par défaut » dans le fichier),
+    /// sauf choix de l'utilisateur ; fin de l'affichage temporaire après un retour arrière.
+    private func refreshSubtitles() {
+        _ = subtitleTracks
+        if let until = tempSubtitleUntil, Date() > until {
+            tempSubtitleUntil = nil
+            if userSubtitle == nil || userSubtitle == -1 { player.currentVideoSubTitleIndex = -1 }
+            return
+        }
+        guard tempSubtitleUntil == nil, userSubtitle == nil, let s = startedAt, Date().timeIntervalSince(s) < 8 else { return }
+        if player.currentVideoSubTitleIndex != -1 { player.currentVideoSubTitleIndex = -1 }
+    }
+
+    /// Après un retour arrière, sous-titres affichés 10 s s'ils sont désactivés (pour relire une réplique).
+    func showSubtitlesBriefly() {
+        guard player.currentVideoSubTitleIndex == -1 else { return }
+        let tracks = subtitleTracks.filter { $0.id >= 0 }
+        guard let t = tracks.first(where: { $0.name.lowercased().contains("fr") }) ?? tracks.first else { return }
+        player.currentVideoSubTitleIndex = t.id
+        tempSubtitleUntil = Date().addingTimeInterval(10)
+    }
 
     private func pairs(_ idx: [Any]?, _ names: [Any]?) -> [Track] {
         let i = (idx ?? []).compactMap { ($0 as? NSNumber)?.int32Value }

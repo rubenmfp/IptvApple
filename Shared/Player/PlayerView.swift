@@ -42,6 +42,9 @@ struct PlayerView: View {
     @State private var osd = ""          // message bref : « +10 s »
     @State private var osdTask: Task<Void, Never>?
     @FocusState private var focus: PlayerFocus?
+    #if os(iOS)
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    #endif
     #if os(tvOS)
     @State private var panel: OptionPanel?
     @FocusState private var panelFocus: Int?
@@ -183,37 +186,53 @@ struct PlayerView: View {
     }
 
     /// Bas de l'écran : reculer, lecture, avancer à gauche ; audio, sous-titres, vitesse, format à droite.
-    private var buttonRow: some View {
-        HStack(spacing: Theme.tv ? 26 : 14) {
-            if !req.live {
-                iconButton("gobackward.10", "Reculer de 10 s", .back) { seek(-10) }
+    /// iPhone en portrait : deux lignes (lecture à gauche, options à droite en dessous), sinon tout est serré.
+    @ViewBuilder private var buttonRow: some View {
+        #if os(iOS)
+        if verticalSizeClass == .regular && UIDevice.current.userInterfaceIdiom == .phone {
+            VStack(spacing: 6) {
+                HStack(spacing: 14) { transportButtons; Spacer(minLength: 0) }
+                HStack(spacing: 14) { Spacer(minLength: 0); optionButtons }
             }
-            iconButton(engine.phase == .paused ? "play.fill" : "pause.fill", engine.phase == .paused ? "Lecture" : "Pause", .play) {
-                engine.togglePause()
-            }
-            if !req.live {
-                iconButton("goforward.10", "Avancer de 10 s", .forward) { seek(10) }
-            }
-            Spacer(minLength: 10)
-            #if os(tvOS)
-            iconButton("speaker.wave.2", "Audio", .audio) { openPanel(.audio) }
-            iconButton("captions.bubble", "Sous-titres", .subtitles) { openPanel(.subtitles) }
-            if !req.live { iconButton("gauge.with.dots.needle.67percent", "Vitesse", .speed) { openPanel(.speed) } }
-            #else
-            OptionsMenus(engine: engine, live: req.live, focus: $focus)
-            if UIDevice.current.userInterfaceIdiom == .phone {
-                iconButton(rotation == 1 ? "rotate.right" : "lock.rotation", "Rotation", .rotation) { nextRotation() }
-            }
-            #endif
-            iconButton("aspectratio", "Format : " + engine.aspect.rawValue, .aspect) {
-                engine.nextAspect()
-                flash("Format : " + engine.aspect.rawValue)
-            }
+            .foregroundStyle(.white)
+        } else {
+            HStack(spacing: 14) { transportButtons; Spacer(minLength: 10); optionButtons }
+                .foregroundStyle(.white)
         }
-        .foregroundStyle(.white)
-        #if os(tvOS)
-        .disabled(panel != nil)
+        #else
+        HStack(spacing: 26) { transportButtons; Spacer(minLength: 10); optionButtons }
+            .foregroundStyle(.white)
+            .disabled(panel != nil)
         #endif
+    }
+
+    @ViewBuilder private var transportButtons: some View {
+        if !req.live {
+            iconButton("gobackward.10", "Reculer de 10 s", .back) { seek(-10) }
+        }
+        iconButton(engine.phase == .paused ? "play.fill" : "pause.fill", engine.phase == .paused ? "Lecture" : "Pause", .play) {
+            engine.togglePause()
+        }
+        if !req.live {
+            iconButton("goforward.10", "Avancer de 10 s", .forward) { seek(10) }
+        }
+    }
+
+    @ViewBuilder private var optionButtons: some View {
+        #if os(tvOS)
+        iconButton("speaker.wave.2", "Audio", .audio) { openPanel(.audio) }
+        iconButton("captions.bubble", "Sous-titres", .subtitles) { openPanel(.subtitles) }
+        if !req.live { iconButton("gauge.with.dots.needle.67percent", "Vitesse", .speed) { openPanel(.speed) } }
+        #else
+        OptionsMenus(engine: engine, live: req.live, focus: $focus)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            iconButton(rotation == 1 ? "rotate.right" : "lock.rotation", "Rotation", .rotation) { nextRotation() }
+        }
+        #endif
+        iconButton("aspectratio", "Format : " + engine.aspect.rawValue, .aspect) {
+            engine.nextAspect()
+            flash("Format : " + engine.aspect.rawValue)
+        }
     }
 
     private func iconButton(_ icon: String, _ text: String, _ f: PlayerFocus, action: @escaping () -> Void) -> some View {
@@ -269,7 +288,14 @@ struct PlayerView: View {
             if !req.live, !url.pathExtension.isEmpty { Store.setGoodExt(req.kind, url.pathExtension) }
             if req.live { Store.addRecentLive(req.key) } else { Store.addRecent(req.key) }
         }
+        #if os(iOS)
+        // l'écran passe en paysage : on attend la fin de la rotation pour que VLC prenne la bonne taille d'image
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            engine.play(req.urls, startAt: req.startMs, live: req.live)
+        }
+        #else
         engine.play(req.urls, startAt: req.startMs, live: req.live)
+        #endif
         showControls()
     }
 
