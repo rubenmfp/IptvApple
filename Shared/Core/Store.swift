@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import Security
 
 /// Données de visionnage gardées sur l'appareil : reprise de lecture, contenus vus, lectures récentes, extensions qui marchent.
 /// Les clés reprennent celles de l'appli Android (« vod:123 », « series:45 », « ep:678 », « live:9 ») pour la synchronisation.
@@ -140,10 +141,16 @@ enum Store {
         stamp("lq|" + k)
     }
 
-    // ---------- clé TMDB (synchronisée) ----------
+    // ---------- clé TMDB (synchronisée), gardée dans le trousseau ----------
     static var tmdbKey: String {
-        get { d.string(forKey: "tmdb") ?? "" }
-        set { if newValue != tmdbKey { d.set(newValue, forKey: "tmdb"); stamp("tmdb") } }
+        get {
+            if let old = d.string(forKey: "tmdb") {          // versions 0.7 et 0.8 : la clé était dans les préférences
+                Secret.set("tmdb", old)
+                d.removeObject(forKey: "tmdb")
+            }
+            return Secret.get("tmdb")
+        }
+        set { if newValue != tmdbKey { Secret.set("tmdb", newValue); stamp("tmdb") } }
     }
 
     // ---------- séries suivies (cloche) : clé de la série -> suivi ----------
@@ -253,7 +260,8 @@ extension Store {
         case "accent": return has("accent") ? String(accent) : nil
         case "chue": return has("chue") ? String(Float(customHue)) : nil
         case "csat": return has("csat") ? String(Float(customSat)) : nil
-        case "tmdb", "prefq": return nonEmpty(d.string(forKey: k))
+        case "tmdb": return nonEmpty(tmdbKey)
+        case "prefq": return nonEmpty(d.string(forKey: k))
         case "recent", "rlive": return nonEmpty((d.stringArray(forKey: k) ?? []).joined(separator: ","))
         case "lists": return has("lists") ? listsJSON(lists, order: listNames) : nil
         case "hcats": let h = hiddenCats; return h.isEmpty ? nil : jsonText(h.sorted())
@@ -313,7 +321,9 @@ extension Store {
                 if let v, let i = Int(v) { d.set(i, forKey: k) } else { d.removeObject(forKey: k) }
             case "chue", "csat":
                 if let v, let x = Double(v) { d.set(x, forKey: k) } else { d.removeObject(forKey: k) }
-            case "tmdb", "prefq":
+            case "tmdb":
+                Secret.set("tmdb", v ?? "")
+            case "prefq":
                 if let v { d.set(v, forKey: k) } else { d.removeObject(forKey: k) }
             case "recent", "rlive":
                 d.set((v ?? "").split(separator: ",").map(String.init).filter { !$0.isEmpty }, forKey: k)
@@ -356,6 +366,41 @@ extension Store {
         if fwChanged, let data = try? JSONEncoder().encode(fw) { d.set(data, forKey: "follows") }
         stamps = st
         return n
+    }
+}
+
+/// Petits secrets saisis sur l'appareil (clé TMDB), gardés dans le trousseau, avec une copie en mémoire
+/// (la clé est consultée pour chaque affiche).
+enum Secret {
+    private static let service = "IptvTV"
+    private static let lock = NSLock()
+    private static var cache: [String: String] = [:]
+
+    private static func base(_ name: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: name]
+    }
+
+    static func get(_ name: String) -> String {
+        lock.lock(); defer { lock.unlock() }
+        if let v = cache[name] { return v }
+        var q = base(name)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: AnyObject?
+        let v = SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess ? (out as? Data).flatMap { String(data: $0, encoding: .utf8) } ?? "" : ""
+        cache[name] = v
+        return v
+    }
+
+    static func set(_ name: String, _ v: String) {
+        lock.lock(); defer { lock.unlock() }
+        cache[name] = v
+        SecItemDelete(base(name) as CFDictionary)
+        guard !v.isEmpty else { return }
+        var q = base(name)
+        q[kSecValueData as String] = Data(v.utf8)
+        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        SecItemAdd(q as CFDictionary, nil)
     }
 }
 

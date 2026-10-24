@@ -32,7 +32,7 @@ enum TmdbError: LocalizedError {
 actor Tmdb {
     static let shared = Tmdb()
 
-    nonisolated static var key: String { UserDefaults.standard.string(forKey: "tmdb") ?? "" }
+    nonisolated static var key: String { Store.tmdbKey }
     nonisolated static var enabled: Bool { !key.trimmed.isEmpty }
 
     private var details: [String: TmdbInfo] = [:]
