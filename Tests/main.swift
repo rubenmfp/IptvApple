@@ -91,6 +91,13 @@ check(live2.count, 1, "TF1 en exposants regroupée")
 check(live2[0].variants.map(\.q), ["FHD", "HD", "?", "4K"], "qualités en exposants")
 check(live[0].variants.map(\.q), ["FHD", "HD", "SD"], "qualités de chaîne")
 check(Names.liveGenre(chan(5, "beIN SPORTS 1")), "Sport", "genre Sport")
+// mêmes noms dans des catégories par qualité : la qualité vient de la catégorie, puis regroupement
+let catJSON = #"[{"stream_id":"21","name":"FR: TF1","category_id":"1"},{"stream_id":"22","name":"FR: TF1","category_id":"2"},{"stream_id":"23","name":"FR: TF1","category_id":"3"},{"stream_id":"24","name":"FR: M6","category_id":"3"}]"#
+let byCat = try! XtreamClient.parseStreams(Data(catJSON.utf8), type: "live", cats: ["1": "FRANCE FHD", "2": "FRANCE HD", "3": "FRANCE SD/HD"])
+check(byCat.map { $0.variants.first?.q ?? "" }, ["FHD", "HD", "?", "?"], "qualité tirée de la catégorie")
+let mergedCat = Names.mergeLive(byCat)
+check(mergedCat.count, 2, "chaînes des catégories par qualité regroupées")
+check(mergedCat.first { $0.name == "FR: TF1" }?.variants.map(\.q) ?? [], ["FHD", "HD", "?"], "qualités regroupées")
 
 // ---------- lecture JSON ----------
 let json = #"""

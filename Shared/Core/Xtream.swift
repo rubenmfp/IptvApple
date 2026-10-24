@@ -238,6 +238,15 @@ final class XtreamClient {
     /// Lecture d'une liste get_vod_streams / get_series / get_live_streams.
     static func parseStreams(_ data: Data, type: String, cats: [String: String]) throws -> [Item] {
         let ser = type == "series", live = type == "live"
+        // chaînes sans mention de qualité dans leur nom : celle de leur catégorie (« FRANCE FHD », « FR | HD »…),
+        // pour regrouper les mêmes chaînes rangées dans une catégorie par qualité
+        var catQ: [String: String] = [:]
+        if live {
+            for (id, n) in cats {
+                let q = Names.cleanLive(n).q
+                if q != "?" && !q.contains(" ") { catQ[id] = q }
+            }
+        }
         var list: [Item] = []
         var keyed = false
         try data.withUnsafeBytes { raw in
@@ -269,7 +278,8 @@ final class XtreamClient {
                 }
                 if id == 0 && rawName.trimmed.isEmpty { return }       // pas un contenu (ex. message d'erreur du serveur)
                 let e = ext.trimmed.isEmpty ? "mp4" : ext.trimmed
-                let (nm, q) = live ? Names.cleanLive(rawName) : Names.clean(rawName)
+                var (nm, q) = live ? Names.cleanLive(rawName) : Names.clean(rawName)
+                if live && q == "?", let cq = catQ[catId] { q = cq }
                 let people = ser ? [cast, director].filter { !$0.trimmed.isEmpty }.joined(separator: ", ") : ""
                 if year == 0 && !live, let m = Names.yearInRe.first(rawName), let y = m.group(1, in: rawName) { year = Int(y) ?? 0 }
                 list.append(Item(type: type, id: id, name: nm, poster: icon.trimmed.isEmpty ? nil : icon.trimmed,
