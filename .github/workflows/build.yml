@@ -69,5 +69,5 @@ jobs:
         run: |
           gh release delete derniere -y --cleanup-tag || true
           gh release create derniere out/*.ipa --prerelease --target "$GITHUB_SHA" \
-            --title "Dernière version ($VERSION, $(date -u +%d/%m %Hh%M) UTC)" \
+            --title "Dernière version ($VERSION, $(date -u "+%d/%m %Hh%M") UTC)" \
             --notes "Fichiers à glisser dans Sideloadly : IptvTV-iPhone pour l'iPhone, IptvTV-AppleTV pour l'Apple TV."
