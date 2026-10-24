@@ -12,6 +12,11 @@ struct PlayRequest: Identifiable {
     var seriesId: Int?         // épisode : série à laquelle il appartient
     var next: (() -> PlayRequest?)?
     var nextTitle: String?
+    // direct : chaîne, liste d'où l'on vient (pour ▲ ▼), qualité lue
+    var channel: Item?
+    var channels: [Item] = []
+    var listName = ""
+    var quality: String?
     var live: Bool { kind == "live" }
 }
 
@@ -23,13 +28,18 @@ struct VideoSurface: UIViewRepresentable {
 }
 
 /// Éléments sélectionnables du lecteur (Apple TV).
-enum PlayerFocus: Hashable { case surface, timeline, back, play, forward, audio, subtitles, speed, aspect, rotation, next }
+enum PlayerFocus: Hashable { case surface, timeline, back, play, forward, audio, subtitles, speed, aspect, rotation, next,
+    chanList, chanPrev, chanNext, quality, chanPanel }
 
 /// Panneaux d'options (Apple TV).
 enum OptionPanel: Equatable {
-    case audio, subtitles, speed
-    var title: String { self == .audio ? "Audio" : self == .subtitles ? "Sous-titres" : "Vitesse" }
-    var origin: PlayerFocus { self == .audio ? .audio : self == .subtitles ? .subtitles : .speed }
+    case audio, subtitles, speed, quality
+    var title: String {
+        switch self { case .audio: return "Audio"; case .subtitles: return "Sous-titres"; case .speed: return "Vitesse"; case .quality: return "Qualité" }
+    }
+    var origin: PlayerFocus {
+        switch self { case .audio: return .audio; case .subtitles: return .subtitles; case .speed: return .speed; case .quality: return .quality }
+    }
 }
 
 struct PlayerView: View {
@@ -37,6 +47,11 @@ struct PlayerView: View {
     @State private var req: PlayRequest
     var onClose: () -> Void = {}
     @State private var nextDismissed = false
+    @EnvironmentObject private var model: AppModel
+    /// Direct : liste des chaînes ouverte par-dessus l'image (la chaîne en cours continue), bandeau d'information.
+    @State private var chanPanel = false
+    @State private var banner = false
+    @State private var bannerTask: Task<Void, Never>?
 
     init(req: PlayRequest, onClose: @escaping () -> Void = {}) {
         _req = State(initialValue: req)
@@ -79,6 +94,14 @@ struct PlayerView: View {
             #if os(tvOS)
             if let p = panel { optionPanel(p).transition(.move(edge: .trailing).combined(with: .opacity)) }
             #endif
+            if req.live && (banner || controls), let c = req.channel { liveBanner(c).allowsHitTesting(false) }
+            if chanPanel, let c = req.channel {
+                ChannelPanel(current: c, list: req.channels, listName: req.listName) { ch, list, name in
+                    chanPanel = false
+                    switchChannel(ch, list: list, name: name)
+                } close: { closeChannels() }
+                .transition(.move(edge: .leading).combined(with: .opacity))
+            }
             if !osd.isEmpty {
                 Text(osd).font(.title2.bold()).padding(.horizontal, 22).padding(.vertical, 12)
                     .background(.black.opacity(0.6), in: Capsule()).foregroundStyle(.white)
@@ -109,7 +132,8 @@ struct PlayerView: View {
         .onChange(of: focus) { _, _ in if controls { scheduleHide() } }
         #if os(tvOS)
         .onExitCommand {
-            if panel != nil { closePanel() }
+            if chanPanel { closeChannels() }
+            else if panel != nil { closePanel() }
             else if focus == .next { nextDismissed = true; focus = .surface }
             else if controls, engine.phase != .opening, !isFailed { hideControls() } else { close() }
         }
@@ -226,18 +250,38 @@ struct PlayerView: View {
     }
 
     @ViewBuilder private var transportButtons: some View {
+        if req.live {
+            iconButton("list.bullet", "Liste des chaînes", .chanList) { openChannels() }
+            iconButton("chevron.up", "Chaîne précédente", .chanPrev) { stepChannel(-1) }
+            iconButton("chevron.down", "Chaîne suivante", .chanNext) { stepChannel(1) }
+        }
         if !req.live {
             iconButton("gobackward.10", "Reculer de 10 s", .back) { seek(-10) }
         }
-        iconButton(engine.phase == .paused ? "play.fill" : "pause.fill", engine.phase == .paused ? "Lecture" : "Pause", .play) {
-            engine.togglePause()
-        }
         if !req.live {
+            iconButton(engine.phase == .paused ? "play.fill" : "pause.fill", engine.phase == .paused ? "Lecture" : "Pause", .play) {
+                engine.togglePause()
+            }
             iconButton("goforward.10", "Avancer de 10 s", .forward) { seek(10) }
         }
     }
 
     @ViewBuilder private var optionButtons: some View {
+        if req.live, let c = req.channel, c.variants.count > 1 {
+            #if os(tvOS)
+            iconButton("square.stack.3d.up", "Qualité", .quality) { openPanel(.quality) }
+            #else
+            Menu {
+                ForEach(c.variants, id: \.id) { v in
+                    Button { changeQuality(v) } label: {
+                        if v.q == req.quality { Label(v.q == "?" ? "Standard" : v.q, systemImage: "checkmark") } else { Text(v.q == "?" ? "Standard" : v.q) }
+                    }
+                }
+            } label: {
+                Image(systemName: "square.stack.3d.up").font(.system(size: 24, weight: .semibold)).frame(width: 48, height: 48)
+            }
+            #endif
+        }
         #if os(tvOS)
         iconButton("speaker.wave.2", "Audio", .audio) { openPanel(.audio) }
         iconButton("captions.bubble", "Sous-titres", .subtitles) { openPanel(.subtitles) }
@@ -279,7 +323,8 @@ struct PlayerView: View {
     /// OK = pause, ◀ ▶ = −/+10 s, ▲ ▼ = afficher les commandes.
     private var tvSurface: some View {
         Button {
-            engine.togglePause()
+            // direct : OK affiche les commandes sans mettre en pause
+            if !req.live { engine.togglePause() }
             showControls()
         } label: {
             Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -288,6 +333,17 @@ struct PlayerView: View {
         .focused($focus, equals: .surface)
         .disabled(controls)
         .onMoveCommand { dir in
+            if req.live {
+                // direct : ▲ ▼ = chaîne précédente / suivante, ◀ = liste des chaînes, ▶ = nom et programme
+                switch dir {
+                case .up: stepChannel(-1)
+                case .down: stepChannel(1)
+                case .left: openChannels()
+                case .right: showBanner()
+                default: break
+                }
+                return
+            }
             switch dir {
             case .left: seek(-10)
             case .right: seek(10)
@@ -353,6 +409,93 @@ struct PlayerView: View {
         // une seule connexion autorisée : petite pause entre la fermeture et l'ouverture
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { startPlayback(n) }
         showControls()
+    }
+
+    // MARK: - Direct
+
+    /// Change de chaîne dans la liste d'où l'on vient (catégorie, genre, favoris, résultats).
+    private func stepChannel(_ d: Int) {
+        guard req.live, let c = req.channel, !req.channels.isEmpty else { return }
+        let i = req.channels.firstIndex { $0.key == c.key } ?? 0
+        let n = req.channels[(i + d + req.channels.count) % req.channels.count]
+        switchChannel(n, list: req.channels, name: req.listName)
+    }
+
+    /// Une seule connexion autorisée : on ferme l'ancien flux, petite pause, puis on ouvre le nouveau.
+    private func switchChannel(_ c: Item, list: [Item], name: String) {
+        engine.stop()
+        let r = model.liveRequest(c, list: list, listName: name)
+        req = r
+        showBanner()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { startPlayback(r) }
+    }
+
+    private func changeQuality(_ v: Variant) {
+        guard let c = req.channel else { return }
+        Store.setLiveQuality(c.key, v.q)
+        if v.q != "?" { Store.prefQuality = v.q.split(separator: " ").first.map(String.init) ?? v.q }
+        switchChannel(c, list: req.channels, name: req.listName)
+    }
+
+    private func openChannels() {
+        withAnimation(.easeOut(duration: 0.2)) { chanPanel = true; controls = false }
+        hideTask?.cancel()
+    }
+
+    private func closeChannels() {
+        withAnimation(.easeIn(duration: 0.2)) { chanPanel = false }
+        #if os(tvOS)
+        DispatchQueue.main.async { focus = .surface }
+        #endif
+    }
+
+    private func showBanner() {
+        banner = true
+        bannerTask?.cancel()
+        bannerTask = Task {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if !Task.isCancelled { withAnimation { banner = false } }
+        }
+    }
+
+    /// Nom de la chaîne et programme en cours / suivant.
+    private func liveBanner(_ c: Item) -> some View {
+        let (cur, next) = model.epgNowNext(c)
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return VStack {
+            HStack(alignment: .top, spacing: 16) {
+                if let p = c.poster, !p.isEmpty {
+                    LogoImage(url: p).frame(width: Theme.tv ? 120 : 64, height: Theme.tv ? 70 : 38)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        if let i = req.channels.firstIndex(where: { $0.key == c.key }) {
+                            Text("\(i + 1)").font(Theme.tv ? .title3.bold() : .headline).foregroundStyle(Theme.accent)
+                        }
+                        Text(c.name).font(Theme.tv ? .title3.bold() : .headline).foregroundStyle(.white)
+                        if let q = req.quality, q != "?" { QualityBadge(text: q) }
+                    }
+                    if let p = cur {
+                        Text("\(f.string(from: p.start))–\(f.string(from: p.stop))  \(p.title)").font(Theme.tv ? .callout : .footnote)
+                            .foregroundStyle(.white).lineLimit(1)
+                    }
+                    if let n = next {
+                        Text("Ensuite \(f.string(from: n.start))  \(n.title)").font(Theme.tv ? .caption : .caption2)
+                            .foregroundStyle(Theme.dim).lineLimit(1)
+                    }
+                    if !req.listName.isEmpty {
+                        Text(req.listName).font(.caption2).foregroundStyle(Theme.dim)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(Theme.tv ? 24 : 12)
+            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, Theme.tv ? 80 : 12)
+            .padding(.top, Theme.tv ? 140 : 60)
+            Spacer()
+        }
     }
 
     private func finish() {
@@ -423,7 +566,7 @@ struct PlayerView: View {
         #if os(tvOS)
         // la sélection ne va sur la barre de progression que si les commandes étaient masquées
         if wasHidden || focus == nil || focus == .surface {
-            DispatchQueue.main.async { focus = req.live ? .play : .timeline }
+            DispatchQueue.main.async { focus = req.live ? .chanList : .timeline }
         }
         #else
         _ = wasHidden
@@ -468,6 +611,11 @@ struct PlayerView: View {
         case .subtitles:
             return engine.subtitleTracks.map { t in
                 PanelItem(title: t.id < 0 ? "Désactivés" : t.name, on: t.id == engine.currentSubtitle) { engine.setSubtitle(t.id) }
+            }
+        case .quality:
+            guard let c = req.channel else { return [] }
+            return c.variants.map { v in
+                PanelItem(title: v.q == "?" ? "Standard" : v.q, on: v.q == req.quality) { changeQuality(v) }
             }
         case .speed:
             let rates: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
@@ -792,3 +940,92 @@ struct InvisibleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View { configuration.label }
 }
 #endif
+
+
+/// Panneau « Chaînes » du lecteur : la chaîne en cours continue pendant qu'on cherche la suivante.
+/// Liste en cours (catégorie, genre, favoris…), favoris, toutes les chaînes, ou recherche dans toutes les chaînes.
+struct ChannelPanel: View {
+    @EnvironmentObject var model: AppModel
+    let current: Item
+    let list: [Item]
+    let listName: String
+    let pick: (Item, [Item], String) -> Void
+    let close: () -> Void
+    @State private var mode = 0          // 0 = liste en cours, 1 = favoris, 2 = toutes
+    @State private var query = ""
+    @FocusState private var focused: String?
+
+    var body: some View {
+        let searching = query.trimmed.count >= 2
+        let base: [Item] = searching ? model.searchLive(query)
+            : mode == 1 ? (model.favLiveRow()?.items ?? []) : mode == 2 ? model.visibleLive : list
+        let name = searching ? "Résultats" : mode == 1 ? "Favoris" : mode == 2 ? "Toutes les chaînes" : listName
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Chaînes").font(Theme.tv ? .title3.bold() : .headline).foregroundStyle(.white)
+                    Spacer()
+                    #if os(iOS)
+                    Button { close() } label: { Image(systemName: "xmark").foregroundStyle(.white) }
+                    #endif
+                }
+                TextField("Rechercher une chaîne", text: $query)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .padding(8)
+                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 8))
+                    #endif
+                if !searching {
+                    HStack(spacing: Theme.tv ? 16 : 8) {
+                        modeButton(0, listName.isEmpty ? "Liste" : String(listName.prefix(16)))
+                        modeButton(1, "Favoris")
+                        modeButton(2, "Toutes")
+                    }
+                }
+                Text("\(name) · \(base.count)").font(.caption).foregroundStyle(Theme.dim).lineLimit(1)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: Theme.tv ? 10 : 6) {
+                            ForEach(base, id: \.key) { c in
+                                ChannelLine(item: c, sub: model.epgLine(c), current: c.key == current.key) { pick(c, base, name) }
+                                    .focused($focused, equals: c.key)
+                                    .id(c.key)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .onAppear {
+                        proxy.scrollTo(current.key, anchor: .center)
+                        #if os(tvOS)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { focused = current.key }
+                        #endif
+                    }
+                }
+            }
+            .padding(Theme.tv ? 40 : 14)
+            .frame(width: Theme.tv ? 640 : 330)
+            .frame(maxHeight: .infinity)
+            .background(Color(red: 0.06, green: 0.07, blue: 0.09).opacity(0.95))
+            #if os(tvOS)
+            .focusSection()
+            #endif
+            Spacer()
+        }
+        .ignoresSafeArea()
+    }
+
+    private func modeButton(_ m: Int, _ title: String) -> some View {
+        Button { mode = m } label: {
+            Text(title).font(.caption).lineLimit(1)
+                #if os(iOS)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(mode == m ? Theme.accent : Color.white.opacity(0.12), in: Capsule())
+                .foregroundStyle(.white)
+                #endif
+        }
+        #if os(iOS)
+        .buttonStyle(.plain)
+        #endif
+    }
+}

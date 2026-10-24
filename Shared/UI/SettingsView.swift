@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @State private var refreshDays = Prefs.refreshDays
     @State private var confirmLogout = false
+    @State private var epgTick = 0
 
     private var version: String {
         let i = Bundle.main.infoDictionary
@@ -52,6 +53,14 @@ struct SettingsView: View {
                         Text("Qualité préférée : \(Store.prefQuality) (la dernière choisie, proposée d'office)").foregroundStyle(Theme.dim)
                     }
                 }
+                Section("Guide des programmes") {
+                    Toggle("Charger à l'ouverture du Direct", isOn: Binding(get: { Prefs.epgAuto }, set: { Prefs.epgAuto = $0; epgTick += 1 }))
+                    TextField("Adresse XMLTV (vide = celle du fournisseur)", text: Binding(get: { Prefs.epgUrl }, set: { Prefs.epgUrl = $0; epgTick += 1 }))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button("Charger le guide maintenant") { model.loadEpg() }
+                    if !model.epgStatus.isEmpty { Text(model.epgStatus).foregroundStyle(Theme.dim) }
+                }
                 Section("Recherche par acteur") {
                     Text("Distribution connue pour \(model.indexing ? model.indexDone : model.indexedCount) films sur \(model.filmCount).")
                     Button(model.indexing ? "Arrêter l'indexation" : "Indexer les acteurs des films") { model.toggleIndexing() }
@@ -60,7 +69,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.5 : recherche, listes, catégories masquées, couleur d'accent.").foregroundStyle(Theme.dim)
+                    Text("Version 0.6 : Direct complet (genres, liste des chaînes, guide des programmes).").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")

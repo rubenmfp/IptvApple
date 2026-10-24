@@ -130,6 +130,23 @@ check(sinfo.backdrop, "http://x/b.jpg", "image de fond en tableau")
 check(sinfo.tmdb, 96677, "tmdb de la série")
 check(sinfo.runtime, 45, "durée moyenne")
 
+// ---------- guide des programmes ----------
+let xml = """
+<?xml version="1.0" encoding="UTF-8"?>
+<tv><channel id="TF1.fr"><display-name>TF1</display-name></channel>
+<programme start="20261024200000 +0200" stop="20261024210000 +0200" channel="TF1.fr"><title lang="fr">Journal &amp; météo</title><desc>Infos</desc></programme>
+<programme start="20261024210000 +0200" stop="20261024230000 +0200" channel="TF1.fr"><title>Film</title></programme>
+<programme start="20261024180000 +0200" stop="20261024190000 +0200" channel="TF1.fr"><title>Passé</title></programme>
+</tv>
+"""
+let at = XMLTVParser.date("20261024203000 +0200")!
+let guide = XMLTVParser.parse(Data(xml.utf8), now: at)
+check(guide["tf1.fr"]?.count ?? 0, 2, "programmes passés écartés")
+let (cur, nxt) = XMLTVParser.nowNext(guide["tf1.fr"], at: at)
+check(cur?.title, "Journal & météo", "programme en cours")
+check(nxt?.title, "Film", "programme suivant")
+check(cur?.desc, "Infos", "description")
+
 // ---------- lien M3U ----------
 let l1 = Xtream.parseLink("http://ex.com:8080/get.php?username=ab%40c&password=p+q&type=m3u_plus&output=ts")
 check(l1?.host, "http://ex.com:8080", "serveur du lien")

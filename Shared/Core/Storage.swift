@@ -72,6 +72,16 @@ enum Prefs {
         set { UserDefaults.standard.set(newValue, forKey: "aspect") }
     }
 
+    /// Guide des programmes : chargé automatiquement à l'ouverture du Direct ; adresse personnalisée (vide = celle du fournisseur).
+    static var epgAuto: Bool {
+        get { UserDefaults.standard.bool(forKey: "epgAuto") }
+        set { UserDefaults.standard.set(newValue, forKey: "epgAuto") }
+    }
+    static var epgUrl: String {
+        get { UserDefaults.standard.string(forKey: "epgUrl") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "epgUrl") }
+    }
+
     static var refreshDays: Int {
         get { let v = UserDefaults.standard.integer(forKey: "refreshDays"); return (1...5).contains(v) ? v : 1 }
         set { UserDefaults.standard.set(newValue, forKey: "refreshDays") }

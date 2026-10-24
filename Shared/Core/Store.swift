@@ -118,6 +118,14 @@ enum Store {
         set { d.set(newValue, forKey: "csat"); stamp("csat") }
     }
 
+    // ---------- qualité choisie pour une chaîne ----------
+    static func liveQuality(_ k: String) -> String { d.string(forKey: "lq_" + k) ?? "" }
+    static func setLiveQuality(_ k: String, _ q: String) {
+        if q == liveQuality(k) { return }
+        d.set(q, forKey: "lq_" + k)
+        stamp("lq|" + k)
+    }
+
     // ---------- dernier épisode lancé d'une série ----------
     static func lastEp(_ seriesId: Int) -> Int { d.integer(forKey: "last_\(seriesId)") }
     static func setLastEp(_ seriesId: Int, _ epId: Int) {
@@ -152,7 +160,7 @@ enum Store {
     /// Efface tout (déconnexion).
     static func reset() {
         for k in d.dictionaryRepresentation().keys where k.hasPrefix("p_") || k.hasPrefix("d_") || k.hasPrefix("s_") || k.hasPrefix("ext_") || k.hasPrefix("last_")
-            || k.hasPrefix("r_") || ["recent", "rlive", "stamps", "favs", "lists", "listOrder", "hcats", "prefq"].contains(k) {
+            || k.hasPrefix("r_") || k.hasPrefix("lq_") || ["recent", "rlive", "stamps", "favs", "lists", "listOrder", "hcats", "prefq"].contains(k) {
             d.removeObject(forKey: k)
         }
     }

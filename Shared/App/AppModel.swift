@@ -489,7 +489,99 @@ final class AppModel: ObservableObject {
         }.value
         live = items
         liveRows = rows
+        let visible = items.filter { !hidden.contains("live|" + $0.cat) }
+        liveGenres = await Task.detached { () -> [Row] in
+            var g: [String: [Item]] = [:]
+            var seen = Set<String>()
+            for c in visible where seen.insert(c.key).inserted {
+                if let n = Names.liveGenre(c) { g[n, default: []].append(c) }
+            }
+            return Names.genres.compactMap { n in g[n].map { Row(id: "genre|" + n, title: n, items: $0) } }
+        }.value
+        if Prefs.epgAuto && epg.isEmpty { loadEpg() }
     }
+
+    // ---------- Direct : genres, favoris, qualité par chaîne ----------
+    /// Chaînes par genre (déduit du nom et de la catégorie), dans l'ordre d'Android.
+    @Published private(set) var liveGenres: [Row] = []
+
+    var visibleLive: [Item] {
+        let hidden = Store.hiddenCats
+        return live.filter { !hidden.contains("live|" + $0.cat) }
+    }
+
+    func favLiveRow() -> Row? {
+        _ = progressTick
+        let byKey = Dictionary(live.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        let items = Store.favs.compactMap { byKey[$0] }
+        return items.isEmpty ? nil : Row(id: "live|*favs", title: "Favoris", items: items)
+    }
+
+    /// Version d'une chaîne à lire : celle choisie pour cette chaîne, sinon la qualité préférée, sinon la meilleure.
+    func liveVariant(_ c: Item) -> Variant? {
+        let q = Store.liveQuality(c.key)
+        return c.variants.first { $0.q == q } ?? c.variants.first { $0.q.hasPrefix(Store.prefQuality) && !Store.prefQuality.isEmpty }
+            ?? c.variants.first
+    }
+
+    func searchLive(_ text: String) -> [Item] {
+        let q = Names.searchKey(text).trimmed
+        guard q.count >= 2 else { return [] }
+        return visibleLive.filter { Names.searchKey($0.name).contains(q) }
+            .sorted { (Names.searchKey($0.name).hasPrefix(q) ? 0 : 1) < (Names.searchKey($1.name).hasPrefix(q) ? 0 : 1) }
+    }
+
+    func liveRequest(_ c: Item, list: [Item], listName: String) -> PlayRequest {
+        let v = liveVariant(c)
+        var r = PlayRequest(title: c.name, key: c.key, kind: "live", urls: liveURLs(id: v?.id ?? c.id))
+        r.channel = c
+        r.channels = list
+        r.listName = listName
+        r.quality = v?.q
+        return r
+    }
+
+    // ---------- guide des programmes (XMLTV) ----------
+    @Published private(set) var epg: [String: [Prog]] = [:]
+    @Published private(set) var epgStatus = ""
+
+    func loadEpg() {
+        guard let a = account, !epgStatus.hasPrefix("Chargement") else { return }
+        let custom = Prefs.epgUrl.trimmed
+        let urlString = custom.isEmpty ? (try? XtreamClient(a).apiURL().absoluteString.replacingOccurrences(of: "/player_api.php", with: "/xmltv.php")) ?? "" : custom
+        guard let url = URL(string: urlString) else { epgStatus = "Adresse du guide invalide."; return }
+        epgStatus = "Chargement du guide… (peut prendre une minute)"
+        Task {
+            do {
+                let c = URLSessionConfiguration.default
+                c.timeoutIntervalForRequest = 60
+                c.timeoutIntervalForResource = 300
+                let (file, resp) = try await URLSession(configuration: c).download(from: url)
+                if let h = resp as? HTTPURLResponse, !(200..<300).contains(h.statusCode) { throw XtreamError.http(h.statusCode) }
+                let m = await Task.detached(priority: .utility) { () -> [String: [Prog]] in
+                    defer { try? FileManager.default.removeItem(at: file) }
+                    return XMLTVParser.parse(contentsOf: file)
+                }.value
+                epg = m
+                let f = DateFormatter(); f.dateFormat = "HH:mm"
+                epgStatus = m.isEmpty ? "Guide vide ou illisible." : "\(m.count) chaînes · chargé à \(f.string(from: Date()))"
+            } catch {
+                epgStatus = "Échec du chargement : \(Self.message(error))"
+            }
+        }
+    }
+
+    /// « Maintenant : titre · 20:45–22:30 » pour une chaîne.
+    func epgLine(_ c: Item) -> String? {
+        guard !c.epg.isEmpty else { return nil }
+        let (cur, next) = XMLTVParser.nowNext(epg[c.epg.lowercased()])
+        let f = DateFormatter(); f.dateFormat = "HH:mm"
+        if let p = cur { return "\(p.title) · \(f.string(from: p.start))–\(f.string(from: p.stop))" }
+        if let n = next { return "Ensuite : \(n.title) à \(f.string(from: n.start))" }
+        return nil
+    }
+
+    func epgNowNext(_ c: Item) -> (Prog?, Prog?) { XMLTVParser.nowNext(epg[c.epg.lowercased()]) }
 
     func recentLiveRow() -> Row? {
         _ = progressTick
