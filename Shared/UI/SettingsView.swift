@@ -125,7 +125,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.9 : rendu sonore, diagnostic du lecteur, autre qualité en cas d'échec.").foregroundStyle(Theme.dim)
+                    Text("Version 0.10 : présentation revue (À la une, fiche, étiquettes, catégories).").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")
@@ -202,32 +202,74 @@ struct AccentView: View {
 /// favoris, listes et « Reprendre » ne changent pas.
 struct HiddenCategoriesView: View {
     @EnvironmentObject var model: AppModel
-    @State private var hidden = Store.hiddenCats
+    @State private var tick = 0
 
     var body: some View {
+        let hidden = Store.hiddenCats
+        let _ = tick
         Form {
-            section("Films", type: "vod", cats: model.catalog?.vodCats ?? [])
-            section("Séries", type: "series", cats: model.catalog?.serCats ?? [])
-            if model.liveCatsOrder.isEmpty {
-                Section("Chaînes") { Text("Ouvrez l'onglet Direct une fois pour charger les catégories de chaînes.").foregroundStyle(Theme.dim) }
-            } else {
-                section("Chaînes", type: "live", cats: model.liveCatsOrder)
+            Section {
+                link("Films", "film", type: "vod", cats: model.catalog?.vodCats ?? [], hidden: hidden)
+                link("Séries", "tv", type: "series", cats: model.catalog?.serCats ?? [], hidden: hidden)
+                if model.liveCatsOrder.isEmpty {
+                    Label("Direct : ouvrez l'onglet Direct une fois pour charger les catégories.", systemImage: "dot.radiowaves.left.and.right")
+                        .foregroundStyle(Theme.dim)
+                } else {
+                    link("Direct", "dot.radiowaves.left.and.right", type: "live", cats: model.liveCatsOrder, hidden: hidden)
+                }
+            } footer: {
+                Text("Une catégorie masquée disparaît des rangées, des tuiles, des recommandations et de la recherche. "
+                     + "Favoris, listes et « Reprendre » ne changent pas.")
             }
         }
         .navigationTitle("Catégories affichées")
+        .onAppear { tick += 1 }
     }
 
-    private func section(_ title: String, type: String, cats: [String]) -> some View {
-        Section("\(title) · \(cats.filter { !hidden.contains(type + "|" + $0) }.count) sur \(cats.count)") {
-            HStack(spacing: 20) {
-                Button("Tout afficher") { for c in cats { set(type + "|" + c, false) } }
-                Button("Tout masquer") { for c in cats { set(type + "|" + c, true) } }
-            }
-            ForEach(cats, id: \.self) { c in
-                let k = type + "|" + c
-                Toggle(c, isOn: Binding(get: { !hidden.contains(k) }, set: { set(k, !$0) }))
+    private func link(_ title: String, _ icon: String, type: String, cats: [String], hidden: Set<String>) -> some View {
+        let shown = cats.filter { !hidden.contains(type + "|" + $0) }.count
+        return NavigationLink {
+            CategoryToggleList(title: title, type: type, cats: cats)
+        } label: {
+            HStack {
+                Label(title, systemImage: icon)
+                Spacer()
+                Text(shown == cats.count ? "Toutes (\(cats.count))" : "\(shown) sur \(cats.count)").foregroundStyle(Theme.dim)
             }
         }
+    }
+}
+
+/// Catégories d'un type (films, séries ou direct), avec un filtre et « Tout afficher / Tout masquer ».
+struct CategoryToggleList: View {
+    @EnvironmentObject var model: AppModel
+    let title: String
+    let type: String
+    let cats: [String]
+    @State private var hidden = Store.hiddenCats
+    @State private var filter = ""
+
+    var body: some View {
+        let k = Names.searchKey(filter.trimmed)
+        let list = k.isEmpty ? cats : cats.filter { Names.searchKey($0).contains(k) }
+        Form {
+            Section {
+                TextField("Filtrer les catégories", text: $filter)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                HStack(spacing: 20) {
+                    Button("Tout afficher") { for c in list { set(type + "|" + c, false) } }
+                    Button("Tout masquer") { for c in list { set(type + "|" + c, true) } }
+                }
+            }
+            Section("\(list.filter { !hidden.contains(type + "|" + $0) }.count) affichées sur \(list.count)") {
+                ForEach(list, id: \.self) { c in
+                    let key = type + "|" + c
+                    Toggle(c, isOn: Binding(get: { !hidden.contains(key) }, set: { set(key, !$0) }))
+                }
+            }
+        }
+        .navigationTitle(title)
     }
 
     private func set(_ k: String, _ h: Bool) {

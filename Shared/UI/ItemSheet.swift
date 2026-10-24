@@ -29,6 +29,22 @@ struct ItemSheet: View {
     @State private var tmdb: TmdbInfo?
     @State private var photos: [String: String] = [:]
     @Environment(\.openURL) private var openURL
+    /// Favoris et listes : menu, nouvelle liste.
+    @State private var listTick = 0
+    @State private var creatingList = false
+    @State private var newListName = ""
+    @State private var listDialog = false
+    #if os(iOS)
+    @State private var rateOpen = false
+    #endif
+    #if os(tvOS)
+    @FocusState private var actionFocus: String?
+    #endif
+
+    private var inAnyList: Bool {
+        _ = listTick
+        return fav || Store.listNames.contains { Store.inList($0, item.key) }
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -54,6 +70,14 @@ struct ItemSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background { backdrop }
         .task(id: item.key) { await load() }
+        .alert("Nouvelle liste", isPresented: $creatingList) {
+            TextField("Nom de la liste", text: $newListName)
+            Button("Créer") { model.createList(newListName, with: item); listTick += 1 }
+            Button("Annuler", role: .cancel) {}
+        } message: { Text("« \(item.name) » y sera ajouté.") }
+        #if os(tvOS)
+        .confirmationDialog(item.name, isPresented: $listDialog, titleVisibility: .visible) { listActions }
+        #endif
         .fullScreenCover(item: $play) { r in
             PlayerView(req: r) { model.progressChanged() }
         }
@@ -113,13 +137,26 @@ struct ItemSheet: View {
 
     // MARK: - En-tête
 
+    /// Fond : la grande image du titre (TMDB ou fournisseur) nette, fondue vers le bas et la gauche ;
+    /// à défaut, l'affiche floutée.
     private var backdrop: some View {
-        ZStack {
+        let wide = (tmdb?.backdrop).flatMap { $0.isEmpty ? nil : $0 } ?? info?.backdrop
+        return ZStack(alignment: .top) {
             Theme.bg
-            RemoteImage(url: info?.backdrop ?? item.poster, px: Theme.tv ? 900 : 500)
-                .blur(radius: Theme.tv ? 50 : 30)
-                .opacity(0.35)
-                .overlay(LinearGradient(colors: [Theme.bg.opacity(0.1), Theme.bg], startPoint: .top, endPoint: .bottom))
+            if let w = wide, !w.isEmpty {
+                RemoteImage(url: w, px: Theme.tv ? 1920 : 900)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Theme.tv ? 760 : 300)
+                    .clipped()
+                    .opacity(0.55)
+                    .overlay(LinearGradient(colors: [.clear, Theme.bg.opacity(0.7), Theme.bg], startPoint: .top, endPoint: .bottom))
+                    .overlay(LinearGradient(colors: [Theme.bg.opacity(0.85), .clear], startPoint: .leading, endPoint: .trailing))
+            } else {
+                RemoteImage(url: item.poster, px: Theme.tv ? 900 : 500)
+                    .blur(radius: Theme.tv ? 50 : 30)
+                    .opacity(0.35)
+                    .overlay(LinearGradient(colors: [Theme.bg.opacity(0.1), Theme.bg], startPoint: .top, endPoint: .bottom))
+            }
         }
         .ignoresSafeArea()
     }
@@ -177,11 +214,7 @@ struct ItemSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if long {
                     Button(expanded ? "Réduire" : "Lire la suite") { withAnimation { expanded.toggle() } }
-                        .font(Theme.tv ? .callout : .footnote.bold())
-                        #if os(iOS)
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Theme.accent)
-                        #endif
+                        .buttonStyle(TextLinkStyle())
                 }
             }
         } else if info == nil && loadError == nil {
@@ -199,56 +232,88 @@ struct ItemSheet: View {
         return p > 10_000 ? (p, Store.dur(k)) : nil
     }
 
+    #if os(tvOS)
+    /// Apple TV : boutons en pilules (Lecture en blanc), puis pictogrammes ronds ; le nom du pictogramme sélectionné
+    /// s'affiche dessous. Une note donnée, un favori ou une série suivie apparaissent en couleur d'accent.
     private var playButtons: some View {
-        HStack(spacing: Theme.tv ? 30 : 10) {
-            if isSeries {
-                if let i = info, let target = AppModel.episodeToPlay(seriesId: item.id, info: i) {
-                    let e = target.0
-                    Button { play = model.episodeRequest(series: item, info: i, episode: e) } label: {
-                        Label("\(target.resume ? "Reprendre" : "Lecture") S\(e.season) É\(e.num)", systemImage: "play.fill").bold()
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 22) {
+                if isSeries {
+                    if let i = info, let target = AppModel.episodeToPlay(seriesId: item.id, info: i) {
+                        let e = target.0
+                        Button { play = model.episodeRequest(series: item, info: i, episode: e) } label: {
+                            Label("\(target.resume ? "Reprendre" : "Lecture") S\(e.season) É\(e.num)", systemImage: "play.fill")
+                        }
+                        .buttonStyle(PillStyle(prominent: true))
+                        .focused($actionFocus, equals: "play")
                     }
+                } else if let p = vodProgress {
+                    Button { startFilm(at: p.pos) } label: { Label("Reprendre à \(fmtTime(p.pos))", systemImage: "play.fill") }
+                        .buttonStyle(PillStyle(prominent: true))
+                        .focused($actionFocus, equals: "play")
+                    Button { startFilm(at: 0) } label: { Label("Début", systemImage: "backward.end.fill") }
+                        .buttonStyle(PillStyle(round: true))
+                        .focused($actionFocus, equals: "Depuis le début")
+                } else {
+                    Button { startFilm(at: 0) } label: { Label("Lecture", systemImage: "play.fill") }
+                        .buttonStyle(PillStyle(prominent: true))
+                        .focused($actionFocus, equals: "play")
                 }
-            } else if let p = vodProgress {
-                Button { startFilm(at: p.pos) } label: { Label("Reprendre à \(fmtTime(p.pos))", systemImage: "play.fill").bold() }
-                Button { startFilm(at: 0) } label: { Label("Début", systemImage: "backward.end.fill") }
-            } else {
-                Button { startFilm(at: 0) } label: { Label("Lecture", systemImage: "play.fill").bold() }
-            }
-            #if os(iOS)
-            if !isSeries, let v = chosen {
-                DownloadButton(entry: DLEntry(key: "vod:\(v.id)", kind: "vod", id: v.id, ext: v.ext, title: item.name,
-                                              subtitle: v.q == "?" ? "" : v.q, poster: item.poster), big: true)
-            }
-            #endif
-            #if os(tvOS)
-            ratingButtons
-            if isSeries {
-                let on = model.follows[item.key] != nil
-                Button { model.setFollow(item, info: info, on: !on) } label: {
-                    Label(on ? "Suivie" : "Suivre", systemImage: on ? "bell.fill" : "bell").labelStyle(.iconOnly)
+                ForEach([-1, 1, 2], id: \.self) { v in
+                    Button {
+                        model.setRating(item, rating == v ? 0 : v)
+                        rating = Store.rating(item.key)
+                    } label: { RatingIcon(value: v, filled: rating == v, size: 30) }
+                    .buttonStyle(PillStyle(selected: rating == v, round: true))
+                    .focused($actionFocus, equals: (ratingLabels[v] ?? "") + (rating == v ? " ✓" : ""))
+                }
+                Button { listDialog = true } label: { Label("Favoris et listes", systemImage: inAnyList ? "heart.fill" : "heart") }
+                    .buttonStyle(PillStyle(selected: inAnyList, round: true))
+                    .focused($actionFocus, equals: inAnyList ? "Dans mes favoris / listes" : "Ajouter aux favoris ou à une liste")
+                if isSeries {
+                    let on = model.follows[item.key] != nil
+                    Button { model.setFollow(item, info: info, on: !on) } label: {
+                        Label(on ? "Suivie" : "Suivre", systemImage: on ? "bell.fill" : "bell")
+                    }
+                    .buttonStyle(PillStyle(selected: on, round: true))
+                    .focused($actionFocus, equals: on ? "Série suivie (Sorties)" : "Suivre la série")
+                }
+                if let t = tmdb?.trailer {
+                    Button { openTrailer(t) } label: { Label("Bande-annonce", systemImage: "film") }
+                        .buttonStyle(PillStyle(round: true))
+                        .focused($actionFocus, equals: "Bande-annonce")
                 }
             }
-            if let t = tmdb?.trailer {
-                Button { openTrailer(t) } label: { Label("Bande-annonce", systemImage: "film").labelStyle(.iconOnly) }
-            }
-            #endif
-            Button {
-                Store.toggleFav(item.key)
-                fav = Store.isFav(item.key)
-                model.progressChanged()
-            } label: {
-                Label(fav ? "Favori" : "Ajouter aux favoris", systemImage: fav ? "heart.fill" : "heart")
-                    #if os(iOS)
-                    .labelStyle(.iconOnly)
-                    #endif
-            }
-            #if os(iOS)
-            .tint(fav ? Theme.accent : .gray)
-            #endif
+            Text(actionFocus.map { $0 == "play" ? " " : $0 } ?? " ")
+                .font(.caption).foregroundStyle(Theme.dim)
+                .animation(nil, value: actionFocus)
         }
-        #if os(iOS)
-        .buttonStyle(.borderedProminent)
-        .controlSize(.regular)
+        .padding(.top, 10)
+        .tvSection()
+    }
+    #endif
+
+    /// Favoris, listes, nouvelle liste (menu sur iPhone, liste de choix sur l'Apple TV).
+    @ViewBuilder private var listActions: some View {
+        Button(fav ? "Retirer des favoris" : "Ajouter aux favoris") {
+            model.toggleFav(item)
+            fav = Store.isFav(item.key)
+            listTick += 1
+        }
+        ForEach(Store.listNames, id: \.self) { name in
+            let inside = Store.inList(name, item.key)
+            Button(inside ? "Retirer de « \(name) »" : "Ajouter à « \(name) »") {
+                model.toggleInList(name, item)
+                listTick += 1
+            }
+        }
+        Button("Nouvelle liste…") {
+            newListName = ""
+            // la liste de choix se ferme d'abord, puis la saisie du nom s'ouvre
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { creatingList = true }
+        }
+        #if os(tvOS)
+        Button("Annuler", role: .cancel) {}
         #endif
     }
 
@@ -301,19 +366,17 @@ struct ItemSheet: View {
                     DownloadTile(entry: DLEntry(key: "vod:\(v.id)", kind: "vod", id: v.id, ext: v.ext, title: item.name,
                                                 subtitle: v.q == "?" ? "" : v.q, poster: item.poster))
                 }
-                Menu {
-                    Button { model.setRating(item, 2); rating = Store.rating(item.key) } label: { Label("J'adore", systemImage: "heart.circle") }
-                    Button { model.setRating(item, 1); rating = Store.rating(item.key) } label: { Label("J'aime", systemImage: "hand.thumbsup") }
-                    Button { model.setRating(item, -1); rating = Store.rating(item.key) } label: { Label("Je n'aime pas", systemImage: "hand.thumbsdown") }
-                } label: {
+                Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { rateOpen.toggle() } } label: {
                     VStack(spacing: 6) {
-                        Image(systemName: rating == 2 ? "heart.circle.fill" : rating == 1 ? "hand.thumbsup.fill" : rating == -1 ? "hand.thumbsdown.fill" : "hand.thumbsup")
-                            .font(.system(size: 22)).foregroundStyle(rating != 0 ? Theme.accent : .white)
-                        Text(rating == 2 ? "J'adore" : rating == 1 ? "J'aime" : rating == -1 ? "Je n'aime pas" : "Noter")
-                            .font(.caption2).foregroundStyle(Theme.dim).lineLimit(1)
+                        RatingIcon(value: rating == 0 ? 1 : rating, filled: rating != 0, size: 22)
+                            .foregroundStyle(rating != 0 ? Theme.accent : .white)
+                            .frame(height: 24)
+                        Text(ratingLabels[rating] ?? "Noter").font(.caption2).foregroundStyle(rating != 0 ? Theme.accent : Theme.dim).lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, minHeight: 52)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(PressStyle())
                 if isSeries {
                     let on = model.follows[item.key] != nil
                     ActionTile(icon: on ? "bell.fill" : "bell", text: on ? "Suivie" : "Suivre", on: on) {
@@ -323,11 +386,41 @@ struct ItemSheet: View {
                 if let t = tmdb?.trailer {
                     ActionTile(icon: "film", text: "Bande-annonce") { openTrailer(t) }
                 }
-                ActionTile(icon: fav ? "heart.fill" : "heart", text: fav ? "Dans mes favoris" : "Favoris", on: fav) {
-                    Store.toggleFav(item.key)
-                    fav = Store.isFav(item.key)
-                    model.progressChanged()
+                Menu { listActions } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: inAnyList ? "heart.fill" : "heart").font(.system(size: 22))
+                            .foregroundStyle(inAnyList ? Theme.accent : .white)
+                        Text(inAnyList ? "Dans mes listes" : "Ma liste").font(.caption2)
+                            .foregroundStyle(inAnyList ? Theme.accent : Theme.dim).lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 52)
                 }
+            }
+            if rateOpen {
+                // notes : trois pictogrammes ronds, celui choisi en couleur d'accent (un second appui retire la note)
+                HStack(spacing: 18) {
+                    ForEach([-1, 1, 2], id: \.self) { v in
+                        Button {
+                            model.setRating(item, rating == v ? 0 : v)
+                            rating = Store.rating(item.key)
+                            withAnimation(.easeOut(duration: 0.25).delay(0.35)) { rateOpen = false }
+                        } label: {
+                            VStack(spacing: 6) {
+                                RatingIcon(value: v, filled: rating == v, size: 24)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 58, height: 58)
+                                    .background(Circle().fill(rating == v ? Theme.accent : Color.white.opacity(0.12)))
+                                    .overlay(Circle().strokeBorder(.white.opacity(rating == v ? 0.8 : 0.15), lineWidth: rating == v ? 2 : 1))
+                                    .scaleEffect(rating == v ? 1.08 : 1)
+                                Text(ratingLabels[v] ?? "").font(.caption2).foregroundStyle(rating == v ? Theme.accent : Theme.dim)
+                            }
+                        }
+                        .buttonStyle(PressStyle())
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .padding(.horizontal, Theme.edge)
@@ -363,22 +456,18 @@ struct ItemSheet: View {
                 HStack(spacing: Theme.tv ? 20 : 8) {
                     ForEach(item.variants, id: \.id) { v in
                         Button { variant = v; if v.q != "?" { Store.prefQuality = v.q } } label: {
-                            HStack(spacing: 6) {
-                                if v.id == chosen?.id { Image(systemName: "checkmark") }
-                                Text(v.q == "?" ? "Standard" : v.q)
-                            }
+                            Text(v.q == "?" ? "Standard" : v.q)
                         }
-                        #if os(iOS)
-                        .buttonStyle(.bordered)
-                        .tint(v.id == chosen?.id ? Theme.accent : .gray)
-                        #endif
+                        .buttonStyle(PillStyle(selected: v.id == chosen?.id))
                     }
                 }
-                .padding(.vertical, Theme.tv ? 20 : 0)
+                .padding(.vertical, Theme.tv ? 20 : 2)
             }
             .scrollClipDisabled()
         }
         .padding(.horizontal, Theme.tv ? 80 : Theme.edge)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tvSection()
     }
 
     // MARK: - Saisons et épisodes
@@ -391,16 +480,15 @@ struct ItemSheet: View {
                         HStack(spacing: Theme.tv ? 20 : 8) {
                             ForEach(i.seasons, id: \.self) { s in
                                 Button { season = s } label: { Text("Saison \(s)") }
-                                    #if os(iOS)
-                                    .buttonStyle(.bordered)
-                                    .tint(s == season ? Theme.accent : .gray)
-                                    #endif
+                                    .buttonStyle(PillStyle(selected: s == season))
                             }
                         }
                         .padding(.horizontal, Theme.tv ? 80 : Theme.edge)
-                        .padding(.vertical, Theme.tv ? 20 : 0)
+                        .padding(.vertical, Theme.tv ? 20 : 2)
                     }
                     .scrollClipDisabled()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .tvSection()
                 } else {
                     Text("Épisodes").font(Theme.rowTitle).foregroundStyle(Theme.light)
                         .padding(.horizontal, Theme.tv ? 80 : Theme.edge)
@@ -417,6 +505,7 @@ struct ItemSheet: View {
                     .padding(.vertical, 24)
                 }
                 .scrollClipDisabled()
+                .tvSection()
                 #else
                 LazyVStack(alignment: .leading, spacing: 12) {
                     #if os(iOS)
@@ -491,19 +580,8 @@ struct ItemSheet: View {
                     .padding(.vertical, Theme.tv ? 16 : 0)
                 }
                 .scrollClipDisabled()
-            }
-        }
-    }
-
-    /// Notes : je n'aime pas, j'aime, j'adore (elles orientent les recommandations).
-    private var ratingButtons: some View {
-        let opts: [(Int, String, String)] = [(-1, "hand.thumbsdown", "Je n'aime pas"), (1, "hand.thumbsup", "J'aime"), (2, "heart.circle", "J'adore")]
-        return ForEach(opts, id: \.0) { v, icon, label in
-            Button {
-                model.setRating(item, v)
-                rating = Store.rating(item.key)
-            } label: {
-                Label(label, systemImage: rating == v ? icon + ".fill" : icon).labelStyle(.iconOnly)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .tvSection()
             }
         }
     }
@@ -526,6 +604,7 @@ struct ItemSheet: View {
                 .padding(.vertical, Theme.tv ? 24 : 0)
             }
             .scrollClipDisabled()
+            .tvSection()
         }
     }
 }

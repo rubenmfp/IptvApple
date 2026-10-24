@@ -13,6 +13,8 @@ struct TmdbInfo: Codable, Equatable {
     var date: String
     var runtime: Int
     var trailer: String?
+    /// Grande image horizontale (« À la une ») ; "" = aucune, nil = ancienne fiche en cache (à recharger).
+    var backdrop: String?
     var directors: [TmdbPerson]
     var cast: [TmdbPerson]
 }
@@ -129,7 +131,7 @@ actor Tmdb {
         guard Self.enabled else { return nil }
         let tv = type == "series"
         let ck = "\(type)|\(tmdbId)|\(title)"
-        if let d = details[ck] { return d }
+        if let d = details[ck], d.backdrop != nil { return d }
         var id = tmdbId
         if id <= 0 {
             guard let hit = try? await findHit(type: type, title: title, year: year), let i = hit["id"] as? Int else { return nil }
@@ -161,7 +163,8 @@ actor Tmdb {
         }
         let info = TmdbInfo(id: id, rating: o["vote_average"] as? Double ?? 0, votes: o["vote_count"] as? Int ?? 0,
                             overview: Self.str(o, "overview"), date: Self.str(o, tv ? "first_air_date" : "release_date"),
-                            runtime: runtime, trailer: trailer, directors: crew, cast: cast.filter { !$0.name.isEmpty })
+                            runtime: runtime, trailer: trailer, backdrop: Self.img(Self.str(o, "backdrop_path"), "w1280") ?? "",
+                            directors: crew, cast: cast.filter { !$0.name.isEmpty })
         details[ck] = info
         return info
     }

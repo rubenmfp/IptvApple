@@ -400,6 +400,22 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // ---------- « À la une » : résumé et grande image ----------
+    struct HeroInfo: Equatable { var plot = ""; var backdrop: String?; var genre = "" }
+    private var heroCache: [String: HeroInfo] = [:]
+
+    func heroInfo(_ item: Item) async -> HeroInfo {
+        if let h = heroCache[item.key] { return h }
+        var h = HeroInfo()
+        if let i = try? await info(for: item) { h.plot = i.plot; h.backdrop = i.backdrop; h.genre = i.genre }
+        if Tmdb.enabled, let t = await Tmdb.shared.details(type: item.type, tmdbId: item.tmdb, title: item.name, year: item.year) {
+            if !t.overview.isEmpty { h.plot = t.overview }
+            if let b = t.backdrop, !b.isEmpty { h.backdrop = b }
+        }
+        heroCache[item.key] = h
+        return h
+    }
+
     // ---------- fiches ----------
     private var infoCache: [String: ItemInfo] = [:]
 

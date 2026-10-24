@@ -111,60 +111,135 @@ struct StatusLine: View {
 
 // MARK: - À la une
 
+/// Grande image du titre (nette), titre en grand, note, genre, résumé, boutons Lecture et Plus d'infos ;
+/// un titre différent toutes les 10 secondes (pas pendant qu'un bouton est sélectionné).
 struct HeroView: View {
+    @EnvironmentObject var model: AppModel
     let items: [Item]
     let open: (Item) -> Void
     @State private var index = 0
+    @State private var details: [String: AppModel.HeroInfo] = [:]
+    @State private var play: PlayRequest?
+    @FocusState private var focus: Int?
 
     var body: some View {
         let item = items[min(index, items.count - 1)]
+        let d = details[item.key]
         ZStack(alignment: .bottomLeading) {
-            RemoteImage(url: item.poster, px: Theme.tv ? 900 : 500)
-                .frame(maxWidth: .infinity)
-                .frame(height: Theme.heroHeight)
-                .blur(radius: Theme.tv ? 30 : 18)
-                .clipped()
-                .overlay(LinearGradient(colors: [.clear, Theme.bg.opacity(0.6), Theme.bg], startPoint: .top, endPoint: .bottom))
-            HStack(alignment: .bottom, spacing: Theme.tv ? 40 : 16) {
-                RemoteImage(url: item.poster, px: Theme.tv ? 500 : 300, fallback: item.name)
-                    .frame(width: Theme.tv ? 260 : 130, height: Theme.tv ? 390 : 195)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .shadow(radius: 12)
-                VStack(alignment: .leading, spacing: Theme.tv ? 14 : 8) {
-                    Text("À LA UNE").font(.caption.weight(.heavy)).foregroundStyle(Theme.accent)
-                    Text(item.name)
-                        .font(Theme.tv ? .title2.weight(.bold) : .title3.weight(.bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                    HStack(spacing: 8) {
-                        if item.year > 0 { Text(String(item.year)) }
-                        if item.rating > 0 { Text("★ " + fmtRating(item.rating)).foregroundStyle(Theme.gold) }
-                        Text(item.cat).lineLimit(1)
-                    }
-                    .font(Theme.tv ? .callout : .caption)
-                    .foregroundStyle(Theme.dim)
-                    Button {
-                        open(item)
-                    } label: {
-                        Label("Voir la fiche", systemImage: "info.circle")
-                    }
-                    #if os(iOS)
-                    .buttonStyle(.borderedProminent)
-                    #endif
+            artwork(item, d).id(item.key).transition(.opacity)
+            VStack(alignment: .leading, spacing: Theme.tv ? 16 : 9) {
+                Text("À LA UNE")
+                    .font(.system(size: Theme.tv ? 20 : 11, weight: .heavy))
+                    .kerning(Theme.tv ? 4 : 2.5)
+                    .foregroundStyle(Theme.accent)
+                Text(item.name)
+                    .font(.system(size: Theme.tv ? 62 : 30, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.6)
+                    .shadow(color: .black.opacity(0.6), radius: 10)
+                metaLine(item, d)
+                if let p = d?.plot, !p.isEmpty {
+                    Text(p)
+                        .font(Theme.tv ? .callout : .footnote)
+                        .foregroundStyle(Theme.light.opacity(0.92))
+                        .lineLimit(Theme.tv ? 3 : 3)
+                        .frame(maxWidth: Theme.tv ? 980 : .infinity, alignment: .leading)
+                        .shadow(color: .black.opacity(0.7), radius: 6)
+                        .transition(.opacity)
                 }
-                Spacer(minLength: 0)
+                HStack(spacing: Theme.tv ? 24 : 10) {
+                    Button { start(item) } label: { Label("Lecture", systemImage: "play.fill") }
+                        .buttonStyle(PillStyle(prominent: true))
+                        .focused($focus, equals: 0)
+                    Button { open(item) } label: { Label("Plus d'infos", systemImage: "info.circle") }
+                        .buttonStyle(PillStyle())
+                        .focused($focus, equals: 1)
+                    Spacer(minLength: 0)
+                    if items.count > 1 { dots }
+                }
+                .padding(.top, Theme.tv ? 8 : 4)
             }
-            .padding(.horizontal, Theme.edge)
-            .padding(.bottom, 8)
+            .padding(.horizontal, Theme.tv ? 0 : Theme.edge)
+            .padding(.bottom, Theme.tv ? 30 : 14)
         }
         .frame(height: Theme.heroHeight)
+        .tvSection()
+        .animation(.easeInOut(duration: 0.6), value: item.key)
+        .animation(.easeOut(duration: 0.4), value: d)
+        .task(id: item.key) {
+            if details[item.key] == nil { details[item.key] = await model.heroInfo(item) }
+            // le suivant à l'avance : pas d'attente au changement
+            let next = items[(index + 1) % items.count]
+            if details[next.key] == nil { details[next.key] = await model.heroInfo(next) }
+        }
         .task(id: items.map(\.key)) {
-            // une affiche différente toutes les 10 secondes
+            index = 0
             while !Task.isCancelled && items.count > 1 {
                 try? await Task.sleep(nanoseconds: 10_000_000_000)
-                withAnimation(.easeInOut(duration: 0.6)) { index = (index + 1) % items.count }
+                if focus == nil { index = (index + 1) % items.count }
             }
         }
+        .fullScreenCover(item: $play) { r in
+            PlayerView(req: r) { model.progressChanged() }
+        }
+    }
+
+    /// Image : la grande image horizontale si elle existe ; sinon l'affiche, nette, à droite, fondue dans le fond.
+    @ViewBuilder private func artwork(_ item: Item, _ d: AppModel.HeroInfo?) -> some View {
+        GeometryReader { g in
+            ZStack(alignment: .trailing) {
+                Theme.bg
+                if let b = d?.backdrop, !b.isEmpty {
+                    RemoteImage(url: b, px: Theme.tv ? 1920 : 1000)
+                        .frame(width: g.size.width, height: g.size.height)
+                        .clipped()
+                } else {
+                    RemoteImage(url: item.poster, px: Theme.tv ? 900 : 600)
+                        .frame(width: min(g.size.width, g.size.height * (Theme.tv ? 1.15 : 0.95)), height: g.size.height)
+                        .clipped()
+                        .overlay(LinearGradient(colors: [Theme.bg, Theme.bg.opacity(0)], startPoint: .leading, endPoint: .init(x: 0.45, y: 0.5)))
+                }
+            }
+            .overlay(LinearGradient(colors: [Theme.bg.opacity(0.92), Theme.bg.opacity(0.45), .clear],
+                                    startPoint: .leading, endPoint: .init(x: 0.75, y: 0.5)))
+            .overlay(LinearGradient(colors: [.clear, .clear, Theme.bg.opacity(0.75), Theme.bg],
+                                    startPoint: .top, endPoint: .bottom))
+        }
+        .frame(height: Theme.heroHeight)
+        .ignoresSafeArea(edges: .horizontal)     // bord à bord, au-delà des marges de la TV
+    }
+
+    private func metaLine(_ item: Item, _ d: AppModel.HeroInfo?) -> some View {
+        HStack(spacing: Theme.tv ? 14 : 8) {
+            if item.rating > 0 {
+                Label(fmtRating(item.rating), systemImage: "star.fill").foregroundStyle(Theme.gold)
+            }
+            if item.year > 0 { Text(String(item.year)) }
+            Text(item.type == "series" ? "Série" : "Film")
+            let g = (d?.genre).flatMap { $0.isEmpty ? nil : $0 } ?? item.cat
+            Text(g).lineLimit(1)
+            if item.variants.contains(where: { $0.q == "4K" }) { QualityBadge(text: "4K") }
+        }
+        .font(Theme.tv ? .callout.weight(.medium) : .caption.weight(.medium))
+        .foregroundStyle(Theme.light.opacity(0.85))
+        .labelStyle(.titleAndIcon)
+    }
+
+    private var dots: some View {
+        HStack(spacing: Theme.tv ? 10 : 5) {
+            ForEach(items.indices, id: \.self) { i in
+                Capsule()
+                    .fill(i == index ? Color.white : Color.white.opacity(0.3))
+                    .frame(width: i == index ? (Theme.tv ? 28 : 16) : (Theme.tv ? 10 : 6), height: Theme.tv ? 10 : 6)
+            }
+        }
+        .animation(.easeOut(duration: 0.3), value: index)
+    }
+
+    /// Film : lecture directe (reprise s'il est commencé). Série : la fiche, pour choisir l'épisode.
+    private func start(_ item: Item) {
+        if item.type == "vod" { play = model.filmRequest(item) } else { open(item) }
     }
 }
 
@@ -184,30 +259,21 @@ struct CategoryStrip: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: Theme.tv ? 24 : 8) {
+            LazyHStack(spacing: Theme.tv ? 40 : 8) {
                 ForEach(rows) { r in
                     Button {
                         go(r.id)
                     } label: {
-                        Text(r.title)
-                            .font(Theme.tv ? .callout : .subheadline)
-                            .lineLimit(1)
-                            #if os(iOS)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(Color.white.opacity(0.12), in: Capsule())
-                            .foregroundStyle(Theme.light)
-                            #endif
+                        Text(r.title).lineLimit(1)
                     }
-                    #if os(iOS)
-                    .buttonStyle(.plain)
-                    #endif
+                    .buttonStyle(ChipStyle())
                 }
             }
             .padding(.horizontal, Theme.edge)
-            .padding(.vertical, Theme.tv ? 16 : 0)
+            .padding(.vertical, Theme.tv ? 10 : 2)
         }
         .scrollClipDisabled()
+        .tvSection()
     }
 }
 
@@ -234,6 +300,7 @@ struct RowView: View {
                 .padding(.vertical, Theme.tv ? 24 : 0)
             }
             .scrollClipDisabled()
+            .tvSection()
         }
     }
 }

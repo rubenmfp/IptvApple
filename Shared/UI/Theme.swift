@@ -15,14 +15,14 @@ enum Theme {
     static let edge: CGFloat = 0          // la TV a déjà ses marges de sécurité
     static let rowGap: CGFloat = 36
     static let cardGap: CGFloat = 36
-    static let heroHeight: CGFloat = 520
+    static let heroHeight: CGFloat = 640
     #else
     static let tv = false
     static let posterWidth: CGFloat = 112
     static let edge: CGFloat = 16
     static let rowGap: CGFloat = 22
     static let cardGap: CGFloat = 10
-    static let heroHeight: CGFloat = 300
+    static let heroHeight: CGFloat = 470
     #endif
 
     static var rowTitle: Font { tv ? .title3.weight(.semibold) : .headline }

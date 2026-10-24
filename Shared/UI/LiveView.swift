@@ -84,29 +84,22 @@ struct LiveView: View {
         let rows = [model.favLiveRow(), model.recentLiveRow().map { Row(id: $0.id, title: "Récentes", items: $0.items) }].compactMap { $0 }
             + model.liveGenres + model.liveRows
         return ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: Theme.tv ? 24 : 8) {
+            LazyHStack(spacing: Theme.tv ? 40 : 8) {
                 ForEach(rows) { r in
                     Button { picker = r } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(r.title).font(Theme.tv ? .callout.bold() : .subheadline.bold()).lineLimit(1)
-                            Text("\(r.items.count) chaînes").font(.caption2).opacity(0.7)
+                        HStack(alignment: .firstTextBaseline, spacing: Theme.tv ? 10 : 6) {
+                            Text(r.title).lineLimit(1)
+                            Text("\(r.items.count)").font(Theme.tv ? .caption2 : .caption2).opacity(0.6).monospacedDigit()
                         }
-                        #if os(iOS)
-                        .padding(.horizontal, 14).padding(.vertical, 9)
-                        .background(r.id.hasPrefix("genre|") ? Theme.accent.opacity(0.35) : Color.white.opacity(0.12),
-                                    in: RoundedRectangle(cornerRadius: 10))
-                        .foregroundStyle(Theme.light)
-                        #endif
                     }
-                    #if os(iOS)
-                    .buttonStyle(.plain)
-                    #endif
+                    .buttonStyle(ChipStyle(tint: r.id.hasPrefix("genre|") ? Theme.accent : nil))
                 }
             }
             .padding(.horizontal, Theme.edge)
-            .padding(.vertical, Theme.tv ? 16 : 0)
+            .padding(.vertical, Theme.tv ? 10 : 2)
         }
         .scrollClipDisabled()
+        .tvSection()
     }
 
     private func channelRow(_ r: Row) -> some View {
