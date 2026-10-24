@@ -1,0 +1,10 @@
+/opt/homebrew/lib/ruby/gems/3.3.0/bin/pod
+1.17.0
+
+0 repos
+=== MobileVLCKit
+[!] Unable to find a pod with name matching `MobileVLCKit'
+=== TVVLCKit
+[!] Unable to find a pod with name matching `TVVLCKit'
+=== VLCKit
+[!] Unable to find a pod with name matching `VLCKit'
