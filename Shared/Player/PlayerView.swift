@@ -19,44 +19,38 @@ struct VideoSurface: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {}
 }
 
+/// Éléments sélectionnables du lecteur (Apple TV).
+enum PlayerFocus: Hashable { case surface, timeline, back, play, forward, audio, subtitles, speed, aspect }
+
 struct PlayerView: View {
     let req: PlayRequest
     var onClose: () -> Void = {}
 
     @StateObject private var engine = PlayerEngine()
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var controls = true
     @State private var hideTask: Task<Void, Never>?
     @State private var lastSave = Date.distantPast
     @State private var osd = ""          // message bref : « +10 s »
     @State private var osdTask: Task<Void, Never>?
-    @State private var scrubbing: Double?
-    #if os(tvOS)
-    @FocusState private var focus: Focus?
-    enum Focus: Hashable { case surface, play }
-    #endif
+    @FocusState private var focus: PlayerFocus?
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                Color.black.ignoresSafeArea()
-                VideoSurface(view: engine.videoView).ignoresSafeArea()
-                #if os(tvOS)
-                tvSurface
-                #else
-                Color.clear.contentShape(Rectangle())
-                    .gesture(
-                        SpatialTapGesture(count: 2).onEnded { v in
-                            seek(v.location.x < geo.size.width / 2 ? -10 : 10)
-                        }.exclusively(before: TapGesture().onEnded { toggleControls() })
-                    )
-                #endif
-                stateLayer
-                if controls { controlsLayer.transition(.opacity) }
-                if !osd.isEmpty {
-                    Text(osd).font(.title2.bold()).padding(.horizontal, 22).padding(.vertical, 12)
-                        .background(.black.opacity(0.6), in: Capsule()).foregroundStyle(.white)
-                }
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VideoSurface(view: engine.videoView).ignoresSafeArea()
+            #if os(tvOS)
+            tvSurface
+            #else
+            TapSurface(onTap: toggleControls, onDoubleTap: { left in seek(left ? -10 : 10) })
+            #endif
+            stateLayer
+            if controls { controlsLayer.transition(.opacity) }
+            if !osd.isEmpty {
+                Text(osd).font(.title2.bold()).padding(.horizontal, 22).padding(.vertical, 12)
+                    .background(.black.opacity(0.6), in: Capsule()).foregroundStyle(.white)
+                    .allowsHitTesting(false)
             }
         }
         .ignoresSafeArea()
@@ -66,18 +60,25 @@ struct PlayerView: View {
         .persistentSystemOverlays(.hidden)
         .onAppear(perform: start)
         .onDisappear(perform: finish)
-        .onReceive(engine.$timeMs) { _ in autosave() }
+        .onReceive(engine.clock.$timeMs) { _ in autosave() }
         .onChange(of: engine.phase) { _, p in
             if p == .ended { saveProgress(); close() }
-            if case .failed = p { controls = true }
+            if case .failed = p { showControls() }
         }
+        .onChange(of: scenePhase) { _, p in
+            if p == .background { saveProgress(); engine.suspend() }
+            if p == .active { engine.resume() }
+        }
+        .onChange(of: focus) { _, _ in if controls { scheduleHide() } }
         #if os(tvOS)
         .onExitCommand {
-            if controls && engine.phase == .playing { hideControls() } else { close() }
+            if controls, engine.phase != .opening, !isFailed { hideControls() } else { close() }
         }
         .onPlayPauseCommand { engine.togglePause(); showControls() }
         #endif
     }
+
+    private var isFailed: Bool { if case .failed = engine.phase { return true }; return false }
 
     // MARK: - États (ouverture, erreur)
 
@@ -89,6 +90,7 @@ struct PlayerView: View {
                 Text("Ouverture…").foregroundStyle(.white)
                 if !engine.attempt.isEmpty { Text(engine.attempt).font(.footnote).foregroundStyle(Theme.dim) }
             }
+            .allowsHitTesting(false)
         case .failed(let msg):
             VStack(spacing: 16) {
                 Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 44)).foregroundStyle(Theme.accent)
@@ -109,17 +111,8 @@ struct PlayerView: View {
 
     // MARK: - Commandes
 
-    private var endTime: String {
-        let left = max(0, engine.durationMs - engine.timeMs)
-        guard engine.durationMs > 0, !req.live else { return "" }
-        let f = DateFormatter(); f.dateFormat = "HH:mm"
-        return "Fin à " + f.string(from: Date().addingTimeInterval(Double(left) / 1000 / Double(max(engine.rate, 0.1))))
-    }
-
-    private var clock: String { let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: Date()) }
-
     private var controlsLayer: some View {
-        VStack {
+        VStack(spacing: 0) {
             // haut : titre à gauche ; heure et heure de fin à droite, deux lignes alignées, sans fond
             HStack(alignment: .top) {
                 #if os(iOS)
@@ -128,137 +121,83 @@ struct PlayerView: View {
                 #endif
                 Text(req.title).font(Theme.tv ? .title3.bold() : .headline).foregroundStyle(.white).lineLimit(1)
                 Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(clock)
-                    if !endTime.isEmpty { Text(endTime) }
-                }
-                .font(Theme.tv ? .title3 : .subheadline).monospacedDigit().foregroundStyle(.white)
-                .shadow(color: .black, radius: 3)
+                ClockView(clock: engine.clock, rate: engine.rate, live: req.live)
             }
             .padding(.horizontal, Theme.tv ? 80 : 20)
-            .padding(.top, Theme.tv ? 50 : 24)
+            .padding(.top, Theme.tv ? 50 : 16)
 
-            Spacer()
-            #if os(iOS)
-            HStack(spacing: 56) {
-                if !req.live { roundButton("gobackward.10") { seek(-10) } }
-                roundButton(engine.phase == .paused ? "play.fill" : "pause.fill", big: true) { engine.togglePause(); showControls() }
-                if !req.live { roundButton("goforward.10") { seek(10) } }
-            }
-            Spacer()
-            #endif
+            Spacer(minLength: 0)
 
-            VStack(spacing: Theme.tv ? 22 : 10) {
-                if !req.live && engine.durationMs > 0 { timeline }
+            VStack(spacing: Theme.tv ? 22 : 8) {
+                if !req.live { timeline }
                 buttonRow
             }
             .padding(.horizontal, Theme.tv ? 80 : 20)
-            .padding(.bottom, Theme.tv ? 50 : 20)
+            .padding(.bottom, Theme.tv ? 50 : 14)
         }
         .background(
-            LinearGradient(colors: [.black.opacity(0.65), .clear, .clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [.black.opacity(0.65), .clear, .clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         )
     }
 
-    private func roundButton(_ icon: String, big: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: big ? 44 : 30, weight: .semibold))
-                .frame(width: big ? 76 : 60, height: big ? 76 : 60)
-                .foregroundStyle(.white)
+    @ViewBuilder private var timeline: some View {
+        #if os(tvOS)
+        // barre sélectionnable : ◀ ▶ = −/+10 s, OK = pause, ▼ = boutons
+        Button { engine.togglePause(); showControls() } label: {
+            TimelineView(clock: engine.clock, focused: focus == .timeline, onScrub: nil)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(InvisibleButtonStyle())
+        .focused($focus, equals: .timeline)
+        .onMoveCommand { dir in
+            switch dir {
+            case .left: seek(-10)
+            case .right: seek(10)
+            default: break
+            }
+        }
+        #else
+        TimelineView(clock: engine.clock, focused: false) { fraction, done in
+            if done { engine.seek(toFraction: fraction) }
+            scheduleHide()
+        }
+        #endif
     }
 
-    private var timeline: some View {
-        let shown = scrubbing.map { Int(Double(engine.durationMs) * $0) } ?? engine.timeMs
-        let frac = engine.durationMs > 0 ? Double(shown) / Double(engine.durationMs) : 0
-        return VStack(spacing: 6) {
-            #if os(iOS)
-            Slider(value: Binding(get: { scrubbing ?? frac }, set: { scrubbing = $0; showControls() }), in: 0...1) { editing in
-                if !editing, let s = scrubbing { engine.seek(toFraction: s); scrubbing = nil }
-            }
-            .tint(Theme.accent)
-            #else
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.3))
-                    Capsule().fill(Theme.accent).frame(width: g.size.width * frac)
-                }
-            }
-            .frame(height: 8)
-            #endif
-            HStack {
-                Text(fmtTime(shown))
-                Spacer()
-                Text("-" + fmtTime(engine.durationMs - shown))
-            }
-            .font(Theme.tv ? .callout : .caption).monospacedDigit().foregroundStyle(.white)
-        }
-    }
-
+    /// Bas de l'écran : reculer, lecture, avancer à gauche ; audio, sous-titres, vitesse, format à droite.
     private var buttonRow: some View {
-        HStack(spacing: Theme.tv ? 30 : 18) {
-            #if os(tvOS)
-            if !req.live { iconButton("gobackward.10", "Reculer") { seek(-10) } }
-            iconButton(engine.phase == .paused ? "play.fill" : "pause.fill", engine.phase == .paused ? "Lecture" : "Pause") {
-                engine.togglePause(); showControls()
-            }
-            .focused($focus, equals: .play)
-            if !req.live { iconButton("goforward.10", "Avancer") { seek(10) } }
-            #endif
-            Menu {
-                let tracks = engine.audioTracks
-                if tracks.isEmpty { Text("Aucune piste") }
-                ForEach(tracks, id: \.self) { t in
-                    Button { engine.setAudio(t.id) } label: { checkLabel(t.name, on: t.id == engine.currentAudio) }
-                }
-            } label: { menuLabel("speaker.wave.2", "Audio") }
-            Menu {
-                ForEach(engine.subtitleTracks, id: \.self) { t in
-                    Button { engine.setSubtitle(t.id) } label: { checkLabel(t.id < 0 ? "Désactivés" : t.name, on: t.id == engine.currentSubtitle) }
-                }
-                if engine.subtitleTracks.isEmpty { Text("Aucun sous-titre") }
-            } label: { menuLabel("captions.bubble", "Sous-titres") }
+        HStack(spacing: Theme.tv ? 26 : 14) {
             if !req.live {
-                Menu {
-                    ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { r in
-                        Button { engine.setRate(Float(r)) } label: {
-                            checkLabel(r == 1 ? "Normale" : String(format: "×%g", r), on: abs(Double(engine.rate) - r) < 0.01)
-                        }
-                    }
-                } label: { menuLabel("gauge.with.dots.needle.67percent", "Vitesse") }
+                iconButton("gobackward.10", "Reculer de 10 s", .back) { seek(-10) }
             }
-            iconButton("aspectratio", engine.aspect.rawValue) { engine.nextAspect(); flash("Format : " + engine.aspect.rawValue) }
-            Spacer(minLength: 0)
+            iconButton(engine.phase == .paused ? "play.fill" : "pause.fill", engine.phase == .paused ? "Lecture" : "Pause", .play) {
+                engine.togglePause()
+            }
+            if !req.live {
+                iconButton("goforward.10", "Avancer de 10 s", .forward) { seek(10) }
+            }
+            Spacer(minLength: 10)
+            OptionsMenus(engine: engine, live: req.live, focus: $focus)
+            iconButton("aspectratio", "Format : " + engine.aspect.rawValue, .aspect) {
+                engine.nextAspect()
+                flash("Format : " + engine.aspect.rawValue)
+            }
         }
         .foregroundStyle(.white)
     }
 
-    @ViewBuilder private func checkLabel(_ s: String, on: Bool) -> some View {
-        if on { Label(s, systemImage: "checkmark") } else { Text(s) }
-    }
-
-    private func menuLabel(_ icon: String, _ text: String) -> some View {
-        Label(text, systemImage: icon)
-            .labelStyle(.iconOnly)
-            .font(.system(size: Theme.tv ? 30 : 22))
-            .frame(width: Theme.tv ? 70 : 40, height: Theme.tv ? 70 : 40)
-            .accessibilityLabel(text)
-    }
-
-    private func iconButton(_ icon: String, _ text: String, action: @escaping () -> Void) -> some View {
-        Button(action: { action(); showControls() }) {
-            Label(text, systemImage: icon)
-                .labelStyle(.iconOnly)
-                .font(.system(size: Theme.tv ? 30 : 22))
-                .frame(width: Theme.tv ? 70 : 40, height: Theme.tv ? 70 : 40)
+    private func iconButton(_ icon: String, _ text: String, _ f: PlayerFocus, action: @escaping () -> Void) -> some View {
+        Button(action: { action(); scheduleHide() }) {
+            Image(systemName: icon)
+                .font(.system(size: Theme.tv ? 30 : 24, weight: .semibold))
+                .frame(width: Theme.tv ? 70 : 44, height: Theme.tv ? 70 : 44)
+                .accessibilityLabel(text)
         }
         #if os(iOS)
         .buttonStyle(.plain)
         #endif
+        .focused($focus, equals: f)
     }
 
     // MARK: - Télécommande (Apple TV)
@@ -309,9 +248,7 @@ struct PlayerView: View {
         onClose()
     }
 
-    private func close() {
-        dismiss()
-    }
+    private func close() { dismiss() }
 
     private func saveProgress() {
         guard !req.live, engine.durationMs > 0, engine.timeMs > 0 else { return }
@@ -326,6 +263,7 @@ struct PlayerView: View {
         guard !req.live else { return }
         engine.seek(by: s)
         flash(s > 0 ? "+\(s) s" : "\(s) s")
+        if controls { scheduleHide() }
     }
 
     private func flash(_ text: String) {
@@ -337,14 +275,25 @@ struct PlayerView: View {
     private func toggleControls() { controls ? hideControls() : showControls() }
 
     private func showControls() {
+        let wasHidden = !controls
         withAnimation(.easeOut(duration: 0.2)) { controls = true }
         #if os(tvOS)
-        if focus == nil || focus == .surface { DispatchQueue.main.async { focus = .play } }
+        // la sélection ne va sur la barre de progression que si les commandes étaient masquées
+        if wasHidden || focus == nil || focus == .surface {
+            DispatchQueue.main.async { focus = req.live ? .play : .timeline }
+        }
+        #else
+        _ = wasHidden
         #endif
+        scheduleHide()
+    }
+
+    /// Les commandes se masquent après 5 s sans action, seulement pendant la lecture.
+    private func scheduleHide() {
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
-            if !Task.isCancelled, engine.phase == .playing, scrubbing == nil { hideControls() }
+            if !Task.isCancelled, engine.phase == .playing { hideControls() }
         }
     }
 
@@ -356,6 +305,169 @@ struct PlayerView: View {
         #endif
     }
 }
+
+// MARK: - Éléments qui suivent la position (redessinés seuls, sans toucher aux menus)
+
+/// Heure et heure de fin, deux lignes alignées à droite, sans fond.
+struct ClockView: View {
+    @ObservedObject var clock: PlaybackClock
+    let rate: Float
+    let live: Bool
+
+    var body: some View {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        let left = max(0, clock.durationMs - clock.timeMs)
+        return VStack(alignment: .trailing, spacing: 2) {
+            Text(f.string(from: Date()))
+            if !live, clock.durationMs > 0 {
+                Text("Fin à " + f.string(from: Date().addingTimeInterval(Double(left) / 1000 / Double(max(rate, 0.1)))))
+            }
+        }
+        .font(Theme.tv ? .title3 : .subheadline).monospacedDigit().foregroundStyle(.white)
+        .shadow(color: .black, radius: 3)
+    }
+}
+
+/// Barre de progression. Sur iPhone, elle se touche ou se fait glisser.
+struct TimelineView: View {
+    @ObservedObject var clock: PlaybackClock
+    let focused: Bool
+    /// (fraction, terminé)
+    var onScrub: ((Double, Bool) -> Void)?
+    @State private var drag: Double?
+
+    var body: some View {
+        let dur = max(clock.durationMs, 1)
+        let frac = drag ?? (clock.durationMs > 0 ? Double(clock.timeMs) / Double(dur) : 0)
+        let shown = Int(Double(dur) * frac)
+        let h: CGFloat = Theme.tv ? (focused ? 14 : 8) : 5
+        return VStack(spacing: Theme.tv ? 10 : 4) {
+            GeometryReader { g in
+                let bar = ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.3)).frame(height: h)
+                    Capsule().fill(Theme.accent).frame(width: max(h, g.size.width * frac), height: h)
+                    if focused || onScrub != nil {
+                        Circle().fill(.white)
+                            .frame(width: Theme.tv ? 26 : 16, height: Theme.tv ? 26 : 16)
+                            .offset(x: g.size.width * frac - (Theme.tv ? 13 : 8))
+                    }
+                }
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                #if os(iOS)
+                bar.gesture(DragGesture(minimumDistance: 0)
+                    .onChanged { v in
+                        let f = min(max(v.location.x / max(g.size.width, 1), 0), 1)
+                        drag = f
+                        onScrub?(f, false)
+                    }
+                    .onEnded { v in
+                        let f = min(max(v.location.x / max(g.size.width, 1), 0), 1)
+                        onScrub?(f, true)
+                        drag = nil
+                    }, including: onScrub == nil ? .none : .all)
+                #else
+                bar
+                #endif
+            }
+            .frame(height: Theme.tv ? 30 : 28)
+            HStack {
+                Text(fmtTime(shown))
+                Spacer()
+                Text("-" + fmtTime(max(0, clock.durationMs - shown)))
+            }
+            .font(Theme.tv ? .callout : .caption).monospacedDigit().foregroundStyle(.white)
+        }
+        .opacity(clock.durationMs > 0 ? 1 : 0.4)
+    }
+}
+
+/// Menus audio, sous-titres et vitesse. Vue à part : la position qui avance ne les redessine pas (plus de clignotement).
+struct OptionsMenus: View {
+    @ObservedObject var engine: PlayerEngine
+    let live: Bool
+    var focus: FocusState<PlayerFocus?>.Binding
+
+    var body: some View {
+        Menu {
+            let tracks = engine.audioTracks
+            if tracks.isEmpty { Text("Aucune piste") }
+            ForEach(tracks, id: \.self) { t in
+                Button { engine.setAudio(t.id) } label: { check(t.name, on: t.id == engine.currentAudio) }
+            }
+        } label: { icon("speaker.wave.2", "Audio") }
+        .focused(focus, equals: .audio)
+
+        Menu {
+            ForEach(engine.subtitleTracks, id: \.self) { t in
+                Button { engine.setSubtitle(t.id) } label: { check(t.id < 0 ? "Désactivés" : t.name, on: t.id == engine.currentSubtitle) }
+            }
+            if engine.subtitleTracks.isEmpty { Text("Aucun sous-titre") }
+        } label: { icon("captions.bubble", "Sous-titres") }
+        .focused(focus, equals: .subtitles)
+
+        if !live {
+            Menu {
+                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { r in
+                    Button { engine.setRate(Float(r)) } label: {
+                        check(r == 1 ? "Normale" : String(format: "×%g", r), on: abs(Double(engine.rate) - r) < 0.01)
+                    }
+                }
+            } label: { icon("gauge.with.dots.needle.67percent", "Vitesse") }
+            .focused(focus, equals: .speed)
+        }
+    }
+
+    @ViewBuilder private func check(_ s: String, on: Bool) -> some View {
+        if on { Label(s, systemImage: "checkmark") } else { Text(s) }
+    }
+
+    private func icon(_ name: String, _ text: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: Theme.tv ? 30 : 22, weight: .semibold))
+            .frame(width: Theme.tv ? 70 : 44, height: Theme.tv ? 70 : 44)
+            .accessibilityLabel(text)
+    }
+}
+
+#if os(iOS)
+/// Zone de toucher plein écran (UIKit) : un appui affiche ou masque les commandes, deux appuis à gauche ou à droite = −/+10 s.
+/// Les gestes UIKit restent fiables même quand l'image se met à jour en continu.
+struct TapSurface: UIViewRepresentable {
+    let onTap: () -> Void
+    let onDoubleTap: (_ left: Bool) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIView {
+        let v = UIView()
+        v.backgroundColor = .clear
+        let double = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.double(_:)))
+        double.numberOfTapsRequired = 2
+        let single = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.single(_:)))
+        single.require(toFail: double)
+        v.addGestureRecognizer(double)
+        v.addGestureRecognizer(single)
+        return v
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.onTap = onTap
+        context.coordinator.onDoubleTap = onDoubleTap
+    }
+
+    final class Coordinator: NSObject {
+        var onTap: () -> Void = {}
+        var onDoubleTap: (Bool) -> Void = { _ in }
+        @objc func single(_ g: UITapGestureRecognizer) { onTap() }
+        @objc func double(_ g: UITapGestureRecognizer) {
+            guard let v = g.view else { return }
+            onDoubleTap(g.location(in: v).x < v.bounds.width / 2)
+        }
+    }
+}
+#endif
 
 #if os(tvOS)
 struct InvisibleButtonStyle: ButtonStyle {

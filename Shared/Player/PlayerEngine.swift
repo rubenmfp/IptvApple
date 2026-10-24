@@ -8,6 +8,13 @@ import MobileVLCKit
 
 /// Moteur de lecture (VLCKit) : lit le .mkv, le HEVC 10 bits et le son MP2, que le lecteur d'Apple ne sait pas lire.
 /// Essaie une à une les adresses possibles (serveur, extension) et retient celle qui marche.
+final class PlaybackClock: ObservableObject {
+    @Published private(set) var timeMs = 0
+    @Published private(set) var durationMs = 0
+    func set(time t: Int) { if abs(t - timeMs) >= 200 { timeMs = t } }
+    func set(duration d: Int) { if d != durationMs { durationMs = d } }
+}
+
 final class PlayerEngine: ObservableObject {
     enum Phase: Equatable { case opening, playing, paused, ended, failed(String) }
 
@@ -24,8 +31,11 @@ final class PlayerEngine: ObservableObject {
     }()
 
     @Published private(set) var phase: Phase = .opening
-    @Published private(set) var timeMs = 0
-    @Published private(set) var durationMs = 0
+    /// Position et durée, publiées à part : l'écran du lecteur (menus compris) n'est pas redessiné quatre fois par seconde,
+    /// seuls la barre de progression et l'heure de fin le sont.
+    let clock = PlaybackClock()
+    var timeMs: Int { clock.timeMs }
+    var durationMs: Int { clock.durationMs }
     @Published private(set) var attempt = ""
     @Published private(set) var aspect: Aspect = .original
     @Published private(set) var rate: Float = 1
@@ -92,8 +102,8 @@ final class PlayerEngine: ObservableObject {
         guard index < candidates.count else { return }
         let st = player.state
         let t = Int(player.time.intValue)
-        timeMs = max(0, t)
-        if let len = player.media?.length.intValue, len > 0 { durationMs = Int(len) }
+        if started || t > 0 { clock.set(time: max(0, t)) }
+        if let len = player.media?.length.intValue, len > 0 { clock.set(duration: Int(len)) }
 
         if !started {
             if player.isPlaying && (t > 0 || player.hasVideoOut) {
@@ -124,6 +134,37 @@ final class PlayerEngine: ObservableObject {
         }
     }
 
+    private var suspendedAt: Int?
+    private var wasPaused = false
+
+    /// Appli en arrière-plan : on ferme le flux (une seule connexion) en retenant la position.
+    func suspend() {
+        guard started, index < candidates.count, suspendedAt == nil else { return }
+        suspendedAt = live ? 0 : timeMs
+        wasPaused = phase == .paused
+        timer?.invalidate()
+        player.stop()
+    }
+
+    /// Retour au premier plan : on rouvre la même adresse à la même position (l'image revient, pas d'écran noir).
+    func resume() {
+        guard let at = suspendedAt else { return }
+        suspendedAt = nil
+        startAtMs = at
+        player.drawable = videoView
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.tick() }
+        let keepPaused = wasPaused
+        open()
+        if keepPaused {
+            // reprendre en pause : on attend que la lecture reparte pour la remettre en pause
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self, self.player.isPlaying else { return }
+                self.player.pause()
+                self.phase = .paused
+            }
+        }
+    }
+
     func stop() {
         timer?.invalidate()
         timer = nil
@@ -139,14 +180,14 @@ final class PlayerEngine: ObservableObject {
         guard !live, durationMs > 0 else { return }
         let target = min(max(0, timeMs + seconds * 1000), max(0, durationMs - 2000))
         player.time = VLCTime(int: Int32(clamping: target))
-        timeMs = target
+        clock.set(time: target)
     }
 
     func seek(toFraction f: Double) {
         guard !live, durationMs > 0 else { return }
         let target = Int(Double(durationMs) * min(max(f, 0), 0.995))
         player.time = VLCTime(int: Int32(clamping: target))
-        timeMs = target
+        clock.set(time: target)
     }
 
     func setRate(_ r: Float) { player.rate = r; rate = r }
