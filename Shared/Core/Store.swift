@@ -1,15 +1,24 @@
 import Foundation
+import CryptoKit
 
 /// Données de visionnage gardées sur l'appareil : reprise de lecture, contenus vus, lectures récentes, extensions qui marchent.
 /// Les clés reprennent celles de l'appli Android (« vod:123 », « series:45 », « ep:678 », « live:9 ») pour la synchronisation.
-/// Chaque modification est datée (« stamps ») : en cas de conflit entre appareils, la plus récente l'emportera (étape 5).
+/// Chaque modification est datée (« stamps ») : entre appareils, la plus récente l'emporte (synchronisation Wi-Fi).
 enum Store {
     private static let d = UserDefaults.standard
+    /// Prévenu à chaque modification d'une donnée partagée : la synchronisation l'enverra aux autres appareils.
+    static let changed = Notification.Name("StoreChanged")
 
     private static func stamp(_ syncKey: String) {
-        var s = d.dictionary(forKey: "stamps") as? [String: Int64] ?? [:]
+        var s = stamps
         s[syncKey] = Int64(Date().timeIntervalSince1970 * 1000)
-        d.set(s, forKey: "stamps")
+        stamps = s
+        NotificationCenter.default.post(name: changed, object: nil)
+    }
+    /// Clé de donnée partagée -> date de sa dernière modification sur cet appareil (millisecondes).
+    fileprivate static var stamps: [String: Int64] {
+        get { (d.dictionary(forKey: "stamps") ?? [:]).compactMapValues { ($0 as? NSNumber)?.int64Value } }
+        set { d.set(newValue.mapValues { NSNumber(value: $0) }, forKey: "stamps") }
     }
 
     // ---------- reprise de lecture ----------
@@ -56,9 +65,14 @@ enum Store {
         return m
     }
     static func saveLists(_ m: [String: [String]], order: [String]) {
-        if let data = try? JSONSerialization.data(withJSONObject: m), let s = String(data: data, encoding: .utf8) { d.set(s, forKey: "lists") }
-        d.set(order.filter { m[$0] != nil }, forKey: "listOrder")
+        let o = order.filter { m[$0] != nil } + m.keys.filter { !order.contains($0) }.sorted()
+        d.set(listsJSON(m, order: o), forKey: "lists")
+        d.set(o, forKey: "listOrder")
         stamp("lists")
+    }
+    /// JSON des listes dans leur ordre (comme sur Android : {"nom":["vod:1",…],…}).
+    fileprivate static func listsJSON(_ m: [String: [String]], order: [String]) -> String {
+        "{" + order.compactMap { n in m[n].map { jsonText(n) + ":" + jsonText($0) } }.joined(separator: ",") + "}"
     }
     static func inList(_ name: String, _ k: String) -> Bool { lists[name]?.contains(k) ?? false }
     static func toggleInList(_ name: String, _ k: String) {
@@ -106,7 +120,7 @@ enum Store {
 
     // ---------- couleur d'accent : indice dans la palette, ou la couleur personnalisée (teinte, saturation) ----------
     static var accent: Int {
-        get { d.integer(forKey: "accent") }
+        get { let v = d.integer(forKey: "accent"); return v == 7 ? 99 : v }      // 7 = ancienne valeur de « Personnalisée »
         set { d.set(newValue, forKey: "accent"); stamp("accent") }
     }
     static var customHue: Double {
@@ -183,6 +197,165 @@ enum Store {
             || k.hasPrefix("r_") || k.hasPrefix("lq_") || ["recent", "rlive", "stamps", "favs", "lists", "listOrder", "hcats", "prefq", "follows", "fchk"].contains(k) {
             d.removeObject(forKey: k)
         }
+    }
+}
+
+// ======================= Synchronisation entre appareils (format de l'appli Android) =======================
+
+/// Empreinte du compte (comme sur Android) : deux appareils ne se synchronisent que s'ils utilisent le même compte Xtream.
+/// 12 premiers octets du SHA-256 de « serveur en minuscules sans / final|utilisateur », en hexadécimal.
+func syncAccount(host: String, user: String) -> String {
+    var h = host.trimmingCharacters(in: .whitespacesAndNewlines)
+    while h.hasSuffix("/") { h.removeLast() }
+    let s = h.lowercased() + "|" + user.trimmingCharacters(in: .whitespacesAndNewlines)
+    return SHA256.hash(data: Data(s.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
+}
+
+/// Une donnée partagée : clé, date de modification, valeur (nil = supprimée).
+struct SyncRec: Equatable {
+    var k: String
+    var t: Int64
+    var v: String?
+}
+
+/// Texte JSON d'une valeur simple (chaîne, tableau…), sans retour à la ligne.
+func jsonText(_ v: Any) -> String {
+    guard let data = try? JSONSerialization.data(withJSONObject: [v]), let s = String(data: data, encoding: .utf8) else { return "null" }
+    return String(s.dropFirst().dropLast())
+}
+
+extension Store {
+    static let syncFixed = ["accent", "chue", "csat", "tmdb", "recent", "rlive", "prefq", "lists", "hcats"]
+    private static let syncPrefixes = ["fav|", "rate|", "pos|", "seen|", "last|", "lq|", "fw|"]
+    static func syncable(_ k: String) -> Bool { syncFixed.contains(k) || syncPrefixes.contains { k.hasPrefix($0) } }
+
+    /// Suivi d'une série au format Android : {"v":…,"k":[…],"n":[{"i":…,"s":…,"e":…,"t":…}]}.
+    static func followText(_ f: Follow) -> String {
+        let n = f.fresh.map { "{\"i\":\($0.id),\"s\":\($0.season),\"e\":\($0.num),\"t\":" + jsonText($0.title) + "}" }
+        return "{\"v\":\(f.vid),\"k\":" + jsonText(f.known.sorted()) + ",\"n\":[" + n.joined(separator: ",") + "]}"
+    }
+    static func parseFollow(_ s: String) -> Follow? {
+        guard let data = s.data(using: .utf8), let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        let fresh = (o["n"] as? [[String: Any]] ?? []).map {
+            NewEp(id: ($0["i"] as? NSNumber)?.intValue ?? 0, season: ($0["s"] as? NSNumber)?.intValue ?? 0,
+                  num: ($0["e"] as? NSNumber)?.intValue ?? 0, title: $0["t"] as? String ?? "")
+        }
+        return Follow(vid: (o["v"] as? NSNumber)?.intValue ?? 0, known: (o["k"] as? [String] ?? []).sorted(), fresh: fresh)
+    }
+
+    private static func has(_ key: String) -> Bool { d.object(forKey: key) != nil }
+
+    /// Valeur actuelle d'une donnée partagée, sous forme de texte ; nil = absente.
+    static func syncValue(_ k: String, favs: Set<String>, fw: [String: Follow]) -> String? {
+        let r = k.firstIndex(of: "|").map { String(k[k.index(after: $0)...]) } ?? ""
+        func nonEmpty(_ s: String?) -> String? { (s ?? "").isEmpty ? nil : s }
+        switch k {
+        case "accent": return has("accent") ? String(accent) : nil
+        case "chue": return has("chue") ? String(Float(customHue)) : nil
+        case "csat": return has("csat") ? String(Float(customSat)) : nil
+        case "tmdb", "prefq": return nonEmpty(d.string(forKey: k))
+        case "recent", "rlive": return nonEmpty((d.stringArray(forKey: k) ?? []).joined(separator: ","))
+        case "lists": return has("lists") ? listsJSON(lists, order: listNames) : nil
+        case "hcats": let h = hiddenCats; return h.isEmpty ? nil : jsonText(h.sorted())
+        default: break
+        }
+        if k.hasPrefix("fav|") { return favs.contains(r) ? "1" : nil }
+        if k.hasPrefix("rate|") { return has("r_" + r) ? String(d.integer(forKey: "r_" + r)) : nil }
+        if k.hasPrefix("pos|") { return has("p_" + r) || has("d_" + r) ? "\(pos(r));\(dur(r))" : nil }
+        if k.hasPrefix("seen|") { return seen(r) ? "1" : nil }
+        if k.hasPrefix("last|") { return has("last_" + r) ? String(d.integer(forKey: "last_" + r)) : nil }
+        if k.hasPrefix("lq|") { return nonEmpty(d.string(forKey: "lq_" + r)) }
+        if k.hasPrefix("fw|") { return fw[r].map(followText) }
+        return nil
+    }
+
+    /// Toutes les données partagées de cet appareil, avec leur date (1 = antérieure à la synchronisation).
+    static func syncRecords() -> [SyncRec] {
+        let fav = Set(favs), fw = follows, st = stamps
+        var keys = Set(st.keys.filter(syncable))
+        keys.formUnion(syncFixed)
+        for f in fav { keys.insert("fav|" + f) }
+        for f in fw.keys { keys.insert("fw|" + f) }
+        for k in d.dictionaryRepresentation().keys {
+            if k.hasPrefix("r_") { keys.insert("rate|" + k.dropFirst(2)) }
+            else if k.hasPrefix("p_") { keys.insert("pos|" + k.dropFirst(2)) }
+            else if k.hasPrefix("s_") { keys.insert("seen|" + k.dropFirst(2)) }
+            else if k.hasPrefix("last_") { keys.insert("last|" + k.dropFirst(5)) }
+            else if k.hasPrefix("lq_") { keys.insert("lq|" + k.dropFirst(3)) }
+        }
+        return keys.sorted().compactMap { k in
+            let v = syncValue(k, favs: fav, fw: fw)
+            let t = st[k] ?? (v != nil ? 1 : 0)
+            return t == 0 && v == nil ? nil : SyncRec(k: k, t: t, v: v)
+        }
+    }
+
+    /// Applique les données d'un autre appareil : pour chaque donnée, la modification la plus récente l'emporte.
+    /// À date égale (données d'avant la synchronisation), une donnée absente ici est ajoutée. Renvoie le nombre de changements.
+    @discardableResult
+    static func applySync(_ recs: [SyncRec]) -> Int {
+        let fav0 = Set(favs)
+        var favList = favs
+        var fw = follows, fwChanged = false
+        var st = stamps
+        var n = 0
+        for r in recs where syncable(r.k) {
+            let k = r.k
+            let cur = syncValue(k, favs: fav0, fw: fw)
+            let lt = st[k] ?? (cur != nil ? 1 : 0)
+            if r.t < lt || (r.t == lt && (r.v == nil || cur != nil)) { continue }
+            st[k] = r.t
+            if cur == r.v { continue }
+            let v = r.v
+            let id = k.firstIndex(of: "|").map { String(k[k.index(after: $0)...]) } ?? ""
+            switch k {
+            case "accent":
+                if let v, let i = Int(v) { d.set(i, forKey: k) } else { d.removeObject(forKey: k) }
+            case "chue", "csat":
+                if let v, let x = Double(v) { d.set(x, forKey: k) } else { d.removeObject(forKey: k) }
+            case "tmdb", "prefq":
+                if let v { d.set(v, forKey: k) } else { d.removeObject(forKey: k) }
+            case "recent", "rlive":
+                d.set((v ?? "").split(separator: ",").map(String.init).filter { !$0.isEmpty }, forKey: k)
+            case "hcats":
+                let a = v.flatMap { $0.data(using: .utf8) }.flatMap { (try? JSONSerialization.jsonObject(with: $0)) as? [String] } ?? []
+                d.set(a.sorted(), forKey: k)
+            case "lists":
+                if let v, let data = v.data(using: .utf8), let m = (try? JSONSerialization.jsonObject(with: data)) as? [String: [String]] {
+                    // ordre des listes : celui du texte reçu
+                    let order = m.keys.sorted { (v.range(of: jsonText($0))?.lowerBound ?? v.endIndex) < (v.range(of: jsonText($1))?.lowerBound ?? v.endIndex) }
+                    d.set(listsJSON(m, order: order), forKey: "lists")
+                    d.set(order, forKey: "listOrder")
+                } else {
+                    d.removeObject(forKey: "lists"); d.removeObject(forKey: "listOrder")
+                }
+            default:
+                if k.hasPrefix("fav|") {
+                    favList.removeAll { $0 == id }
+                    if v != nil { favList.insert(id, at: 0) }
+                } else if k.hasPrefix("rate|") {
+                    if let v, let i = Int(v) { d.set(i, forKey: "r_" + id) } else { d.removeObject(forKey: "r_" + id) }
+                } else if k.hasPrefix("pos|") {
+                    let p = (v ?? "").split(separator: ";").map { Int($0) ?? 0 }
+                    if v != nil, p.count == 2 { d.set(p[0], forKey: "p_" + id); d.set(p[1], forKey: "d_" + id) }
+                    else { d.removeObject(forKey: "p_" + id); d.removeObject(forKey: "d_" + id) }
+                } else if k.hasPrefix("seen|") {
+                    if v != nil { d.set(true, forKey: "s_" + id) } else { d.removeObject(forKey: "s_" + id) }
+                } else if k.hasPrefix("last|") {
+                    if let v, let i = Int(v) { d.set(i, forKey: "last_" + id) } else { d.removeObject(forKey: "last_" + id) }
+                } else if k.hasPrefix("lq|") {
+                    if let v { d.set(v, forKey: "lq_" + id) } else { d.removeObject(forKey: "lq_" + id) }
+                } else if k.hasPrefix("fw|") {
+                    fw[id] = v.flatMap(parseFollow)
+                    fwChanged = true
+                }
+            }
+            n += 1
+        }
+        if Set(favList) != fav0 { d.set(favList, forKey: "favs") }
+        if fwChanged, let data = try? JSONEncoder().encode(fw) { d.set(data, forKey: "follows") }
+        stamps = st
+        return n
     }
 }
 

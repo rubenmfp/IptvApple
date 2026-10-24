@@ -7,6 +7,9 @@ struct SettingsView: View {
     @State private var epgTick = 0
     @State private var tmdbKey = Store.tmdbKey
     @State private var tmdbTest = ""
+    @ObservedObject private var sync = LanSync.shared
+    @State private var syncOn = Prefs.syncOn
+    @State private var syncPeer = Prefs.syncPeer
 
     private var version: String {
         let i = Bundle.main.infoDictionary
@@ -81,6 +84,33 @@ struct SettingsView: View {
                     Button("Charger le guide maintenant") { model.loadEpg() }
                     if !model.epgStatus.isEmpty { Text(model.epgStatus).foregroundStyle(Theme.dim) }
                 }
+                Section("Synchronisation par le Wi-Fi") {
+                    Toggle("Synchroniser avec mes autres appareils", isOn: $syncOn)
+                        .onChange(of: syncOn) { _, v in Prefs.syncOn = v; model.updateSync(active: true) }
+                    if syncOn {
+                        let found = Array(Set(sync.devices.values)).sorted()
+                        Text("Adresse de cet appareil : \(LanSync.localIP())")
+                        Text("Appareils trouvés : " + (found.isEmpty ? (sync.peers.isEmpty ? "aucun pour le moment" : sync.peers.keys.sorted().joined(separator: ", "))
+                                                        : found.joined(separator: ", ")))
+                            .foregroundStyle(Theme.dim)
+                        TextField("Adresse d'un autre appareil (si non trouvé), ex. 192.168.1.20", text: $syncPeer)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            #if os(iOS)
+                            .keyboardType(.numbersAndPunctuation)
+                            #endif
+                            .onSubmit { Prefs.syncPeer = syncPeer.trimmed }
+                        Button("Synchroniser maintenant") {
+                            Prefs.syncPeer = syncPeer.trimmed
+                            sync.syncAll()
+                        }
+                        if !sync.info.isEmpty { Text(sync.info).font(.footnote).foregroundStyle(Theme.dim) }
+                    }
+                    Text("Reprise de lecture, vus, favoris, listes, notes, séries suivies, catégories masquées, couleur et clé TMDB "
+                         + "passent d'un appareil à l'autre (TV Android comprise) quand l'appli est ouverte sur le même Wi-Fi, avec le même compte. "
+                         + "Pour chaque donnée, la modification la plus récente l'emporte. Les identifiants ne sont jamais envoyés.")
+                        .font(.footnote).foregroundStyle(Theme.dim)
+                }
                 Section("Recherche par acteur") {
                     Text("Distribution connue pour \(model.indexing ? model.indexDone : model.indexedCount) films sur \(model.filmCount).")
                     Button(model.indexing ? "Arrêter l'indexation" : "Indexer les acteurs des films") { model.toggleIndexing() }
@@ -89,7 +119,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.7 : Sorties, TMDB, recommandations.").foregroundStyle(Theme.dim)
+                    Text("Version 0.8 : synchronisation par le Wi-Fi avec la TV Android.").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")

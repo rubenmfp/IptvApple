@@ -9,5 +9,12 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<!-- Synchronisation par le Wi-Fi avec la TV Android et les autres appareils (découverte automatique). -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Pour synchroniser la reprise de lecture, les favoris et les listes avec vos autres appareils sur le Wi-Fi de la maison.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_iptvtv._tcp</string>
+	</array>
 </dict>
 </plist>

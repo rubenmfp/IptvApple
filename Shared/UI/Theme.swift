@@ -45,7 +45,7 @@ struct QualityBadge: View {
 enum Accent {
     static let palette: [(String, UInt32)] = [("Rouge", 0xE50914), ("Bleu", 0x2196F3), ("Rose", 0xE91E8C), ("Vert", 0x1DB954),
                                               ("Orange", 0xFF9800), ("Violet", 0x9C27B0), ("Lime", 0x9BD84E)]
-    static var customIndex: Int { palette.count }
+    static let customIndex = 99           // comme sur Android
 
     static func rgb(_ v: UInt32) -> Color {
         Color(red: Double((v >> 16) & 0xFF) / 255, green: Double((v >> 8) & 0xFF) / 255, blue: Double(v & 0xFF) / 255)

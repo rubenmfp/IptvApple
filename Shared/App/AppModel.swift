@@ -132,6 +132,7 @@ final class AppModel: ObservableObject {
 
     private func apply(_ c: Catalog) async {
         let hidden = Store.hiddenCats
+        hiddenUsed = hidden
         let d = await Task.detached(priority: .userInitiated) { Derived.make(c, hidden: hidden) }.value
         catalog = c
         derived = d
@@ -517,8 +518,8 @@ final class AppModel: ObservableObject {
     }
 
     // ---------- catégories masquées, apparence ----------
-    func setHidden(_ all: Set<String>) {
-        Store.hiddenCats = all
+    func setHidden(_ all: Set<String>, save: Bool = true) {
+        if save { Store.hiddenCats = all }
         hiddenTask?.cancel()
         // plusieurs changements de suite : on recalcule une seule fois
         hiddenTask = Task {
@@ -530,12 +531,33 @@ final class AppModel: ObservableObject {
     }
     private var hiddenTask: Task<Void, Never>?
 
-    func setAccent(_ i: Int) { Store.accent = i; appearance += 1 }
+    func setAccent(_ i: Int) { Store.accent = i; appearance += 1; accentUsed = Self.accentSig }
     func setCustomAccent(hue: Double, sat: Double) {
         Store.customHue = hue
         Store.customSat = sat
         Store.accent = Accent.customIndex
         appearance += 1
+        accentUsed = Self.accentSig
+    }
+
+    // ---------- synchronisation Wi-Fi (avec la TV Android et les autres appareils Apple) ----------
+    private var hiddenUsed: Set<String> = []
+    private var accentUsed = AppModel.accentSig
+    private static var accentSig: String { "\(Store.accent)|\(Store.customHue)|\(Store.customSat)" }
+
+    /// Active tant que l'appli est au premier plan (et si elle n'est pas désactivée dans les réglages).
+    func updateSync(active: Bool) {
+        let s = LanSync.shared
+        s.onApplied = { [weak self] in self?.syncApplied() }
+        if active, Prefs.syncOn, phase == .ready, let a = account { s.start(account: a) } else { s.stop() }
+    }
+
+    /// Données reçues d'un autre appareil : l'appli relit tout ce qui est partagé.
+    func syncApplied() {
+        follows = Store.follows
+        if Self.accentSig != accentUsed { accentUsed = Self.accentSig; appearance += 1 }
+        if Store.hiddenCats != hiddenUsed { setHidden(Store.hiddenCats, save: false) }
+        progressChanged()
     }
 
     // ---------- épisodes ----------
@@ -762,6 +784,7 @@ final class AppModel: ObservableObject {
     }
 
     func logout() {
+        LanSync.shared.stop()
         Keychain.delete()
         Store.reset()
         live = []

@@ -173,6 +173,43 @@ check(reco.count, 15, "15 recommandations")
 check(reco.filter { $0.cat == "Action" }.count >= 8, true, "la catégorie aimée domine")
 check(reco.contains { $0.key == "vod:100" || $0.key == "vod:101" }, false, "titres déjà vus ou notés exclus")
 
+// ---------- synchronisation (format Android) ----------
+check(syncAccount(host: "http://Exemple.com:8080/", user: " bob "), syncAccount(host: "http://exemple.com:8080", user: "bob"), "empreinte du compte")
+check(syncAccount(host: "http://exemple.com:8080", user: "bob").count, 24, "empreinte : 12 octets")
+Store.reset()
+Store.setProgress("vod:1", pos: 60_000, dur: 600_000)
+Store.toggleFav("series:2")
+Store.setRating("vod:3", 2)
+Store.saveLists(["À voir": ["vod:1"], "Enfants": []], order: ["À voir", "Enfants"])
+Store.saveFollows(["series:2": Follow(vid: 2, known: ["1:2", "1:1"], fresh: [NewEp(id: 9, season: 1, num: 3, title: "Trois")])], changed: ["series:2"])
+let mine = Store.syncRecords()
+func rec(_ k: String) -> SyncRec? { mine.first { $0.k == k } }
+check(rec("pos|vod:1")?.v, "60000;600000", "position au format Android")
+check(rec("fav|series:2")?.v, "1", "favori")
+check(rec("rate|vod:3")?.v, "2", "note")
+check(rec("lists")?.v, #"{"À voir":["vod:1"],"Enfants":[]}"#, "listes dans l'ordre")
+check(rec("fw|series:2")?.v, #"{"v":2,"k":["1:1","1:2"],"n":[{"i":9,"s":1,"e":3,"t":"Trois"}]}"#, "suivi au format Android")
+check((rec("pos|vod:1")?.t ?? 0) > 1, true, "donnée datée")
+// un autre appareil : plus récent pour la position, plus ancien pour la note, nouveau favori, liste supprimée
+let later = (rec("pos|vod:1")?.t ?? 0) + 1000
+let n = Store.applySync([SyncRec(k: "pos|vod:1", t: later, v: "120000;600000"),
+                         SyncRec(k: "rate|vod:3", t: 5, v: "-1"),
+                         SyncRec(k: "fav|vod:7", t: later, v: "1"),
+                         SyncRec(k: "fav|series:2", t: later, v: nil),
+                         SyncRec(k: "seen|ep:5", t: 1, v: "1"),
+                         SyncRec(k: "hcats", t: later, v: #"["vod|Adultes","live|Radio\/Musique"]"#),
+                         SyncRec(k: "fw|series:4", t: later, v: #"{"v":4,"k":["1:1"],"n":[]}"#),
+                         SyncRec(k: "inconnue", t: later, v: "x")])
+check(n, 6, "changements appliqués")
+check(Store.pos("vod:1"), 120_000, "position la plus récente gardée")
+check(Store.rating("vod:3"), 2, "note plus ancienne ignorée")
+check(Store.favs, ["vod:7"], "favoris fusionnés")
+check(Store.seen("ep:5"), true, "donnée d'avant la synchronisation ajoutée")
+check(Store.hiddenCats, ["vod|Adultes", "live|Radio/Musique"], "catégories masquées")
+check(Store.follows["series:4"]?.vid, 4, "série suivie reçue")
+check(Store.applySync(Store.syncRecords()), 0, "renvoyer ses propres données ne change rien")
+Store.reset()
+
 // ---------- lien M3U ----------
 let l1 = Xtream.parseLink("http://ex.com:8080/get.php?username=ab%40c&password=p+q&type=m3u_plus&output=ts")
 check(l1?.host, "http://ex.com:8080", "serveur du lien")

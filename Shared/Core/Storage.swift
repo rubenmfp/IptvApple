@@ -82,6 +82,22 @@ enum Prefs {
         set { UserDefaults.standard.set(newValue, forKey: "epgUrl") }
     }
 
+    /// Synchronisation par le Wi-Fi : active ou non, adresse d'un appareil saisie à la main, identifiant de cet appareil.
+    static var syncOn: Bool {
+        get { UserDefaults.standard.object(forKey: "syncOn") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "syncOn") }
+    }
+    static var syncPeer: String {
+        get { UserDefaults.standard.string(forKey: "syncPeer") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "syncPeer") }
+    }
+    static var deviceId: String {
+        if let v = UserDefaults.standard.string(forKey: "devid") { return v }
+        let v = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        UserDefaults.standard.set(v, forKey: "devid")
+        return v
+    }
+
     static var refreshDays: Int {
         get { let v = UserDefaults.standard.integer(forKey: "refreshDays"); return (1...5).contains(v) ? v : 1 }
         set { UserDefaults.standard.set(newValue, forKey: "refreshDays") }

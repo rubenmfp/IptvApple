@@ -17,6 +17,9 @@ struct IptvApp: App {
         }
         .onChange(of: scenePhase) { _, p in
             if p == .active { model.refreshIfStale() }
+            // synchronisation Wi-Fi : seulement quand l'appli est au premier plan
+            model.updateSync(active: p != .background)
         }
+        .onChange(of: model.phase) { _, _ in model.updateSync(active: scenePhase != .background) }
     }
 }
