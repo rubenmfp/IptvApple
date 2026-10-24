@@ -20,6 +20,9 @@ struct Derived {
     var byKey: [String: Item] = [:]
     /// Index de recherche : contenu visible et son titre sans accents ni majuscules.
     var index: [(Item, String)] = []
+    /// Contenus visibles (catégories masquées exclues), pour les classements et les recommandations.
+    var vodVisible: [Item] = []
+    var seriesVisible: [Item] = []
 
     /// « En vedette » : les mieux notés (avec affiche), mélangés ; sinon des titres au hasard.
     static func featured(_ pool: [Item]) -> [Item] {
@@ -73,6 +76,8 @@ struct Derived {
             for v in i.variants where bk["\(i.type):\(v.id)"] == nil { bk["\(i.type):\(v.id)"] = i }
         }
         r.byKey = bk
+        r.vodVisible = vodVis
+        r.seriesVisible = serVis
         var seenIdx = Set<String>()
         r.index = (vodVis + serVis).filter { seenIdx.insert($0.key).inserted }.map { ($0, Names.searchKey($0.name)) }
         return r
@@ -130,6 +135,8 @@ final class AppModel: ObservableObject {
         let d = await Task.detached(priority: .userInitiated) { Derived.make(c, hidden: hidden) }.value
         catalog = c
         derived = d
+        updateExtras()
+        checkFollows(force: false)
     }
 
     /// Recharge le catalogue s'il est plus vieux que la durée choisie dans les réglages.
@@ -185,7 +192,7 @@ final class AppModel: ObservableObject {
     }
 
     // ---------- reprise ----------
-    func progressChanged() { progressTick += 1 }
+    func progressChanged() { progressTick += 1; updateExtras() }
 
     /// Position enregistrée d'un contenu (sur l'une de ses versions) : (clé, position, durée).
     static func progress(of item: Item) -> (key: String, pos: Int, dur: Int)? {
@@ -221,6 +228,168 @@ final class AppModel: ObservableObject {
     func sameCategory(as item: Item) -> [Item] {
         let pool = item.type == "vod" ? catalog?.vod : catalog?.series
         return Array((pool ?? []).filter { $0.cat == item.cat && $0.key != item.key && $0.poster != nil }.shuffled().prefix(20))
+    }
+
+    // ---------- classements TMDB, recommandations ----------
+    @Published private(set) var popVod: [Item] = []
+    @Published private(set) var popSeries: [Item] = []
+    @Published private(set) var recoVod: [Item] = []
+    @Published private(set) var recoSeries: [Item] = []
+    private var recoTask: Task<Void, Never>?
+
+    /// « Populaires · France » (si une clé TMDB est saisie) et « Recommandé pour vous ».
+    func updateExtras() {
+        let vod = derived.vodVisible, ser = derived.seriesVisible
+        recoTask?.cancel()
+        recoTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled { return }
+            let recent = Store.recent, favs = Store.favs, ratings = Store.allRatings, ppl = people
+            let all = vod + ser
+            let r = await Task.detached(priority: .utility) { () -> ([Item], [Item]) in
+                let p: (Item) -> String = { $0.people.isEmpty ? (ppl[$0.id] ?? "") : $0.people }
+                return (recoList(pool: vod, all: all, recent: recent, favs: favs, ratings: ratings, people: p),
+                        recoList(pool: ser, all: all, recent: recent, favs: favs, ratings: ratings, people: p))
+            }.value
+            recoVod = r.0
+            recoSeries = r.1
+            if Tmdb.enabled && popVod.isEmpty {
+                let pv = await Tmdb.shared.popular("vod"), ps = await Tmdb.shared.popular("series")
+                let m = await Task.detached(priority: .utility) { (matchPopular(pv, vod), matchPopular(ps, ser)) }.value
+                popVod = Array(m.0.prefix(40))
+                popSeries = Array(m.1.prefix(40))
+            }
+        }
+    }
+
+    /// Rangées d'un onglet : Reprendre, favoris, recommandations, classement, puis catégories.
+    func rows(for tab: String) -> [Row] {
+        _ = progressTick
+        let useV = popVod.count >= 6, useS = popSeries.count >= 6
+        func top(_ r: Row) -> Row {
+            if r.id == "home|vod*" && useV { return Row(id: r.id, title: "Films · Populaires · France", items: popVod) }
+            if r.id == "home|series*" && useS { return Row(id: r.id, title: "Séries · Populaires · France", items: popSeries) }
+            if r.id == "vod|*vedette" && useV { return Row(id: r.id, title: "Populaires · France", items: popVod) }
+            if r.id == "series|*vedette" && useS { return Row(id: r.id, title: "Populaires · France", items: popSeries) }
+            return r
+        }
+        switch tab {
+        case "vod":
+            var out = [resumeRow("vod"), favoritesRow("vod")].compactMap { $0 }
+            let base = derived.vod.map(top)
+            out += base.prefix(1)
+            if !recoVod.isEmpty { out.append(Row(id: "vod|*reco", title: "Pour vous", items: recoVod)) }
+            return out + base.dropFirst()
+        case "series":
+            var out = [resumeRow("series"), favoritesRow("series")].compactMap { $0 }
+            let base = derived.series.map(top)
+            out += base.prefix(1)
+            if !recoSeries.isEmpty { out.append(Row(id: "series|*reco", title: "Pour vous", items: recoSeries)) }
+            return out + base.dropFirst()
+        default:
+            var out = [resumeRow(nil), favoritesRow(nil)].compactMap { $0 }
+            let reco = Array(recoVod.prefix(12)) + Array(recoSeries.prefix(12))
+            if !reco.isEmpty { out.append(Row(id: "home|*reco", title: "Recommandé pour vous", items: reco)) }
+            return out + derived.home.map(top)
+        }
+    }
+
+    func hero(for tab: String) -> [Item] {
+        switch tab {
+        case "vod": return popVod.count >= 6 ? Array(popVod.filter { $0.poster != nil }.prefix(8)) : derived.heroVod
+        case "series": return popSeries.count >= 6 ? Array(popSeries.filter { $0.poster != nil }.prefix(8)) : derived.heroSeries
+        default:
+            if popVod.count >= 6 || popSeries.count >= 6 {
+                return Array((popVod.prefix(6) + popSeries.prefix(6)).filter { $0.poster != nil }.shuffled().prefix(8))
+            }
+            return derived.heroHome
+        }
+    }
+
+    /// Fin d'un film : quelques titres de la même catégorie, puis d'autres.
+    func recommendations(after key: String) -> [Item] {
+        guard let done = derived.byKey[key] else { return [] }
+        let pool = (done.type == "vod" ? derived.vodVisible : derived.seriesVisible)
+            .filter { $0.key != done.key && $0.poster != nil && !Store.recent.contains($0.key) }
+        let same = Array(pool.filter { $0.cat == done.cat }.shuffled().prefix(4))
+        let keys = Set(same.map(\.key))
+        return Array((same + pool.shuffled().prefix(20).filter { !keys.contains($0.key) }).prefix(4))
+    }
+
+    /// Film lancé depuis les recommandations de fin de film : version de qualité préférée, reprise si déjà commencé.
+    func filmRequest(_ item: Item) -> PlayRequest {
+        let v = item.variants.first { $0.q == Store.prefQuality } ?? item.variants.first
+        let id = v?.id ?? item.id
+        let key = "vod:\(id)"
+        let pos = Store.pos(key), dur = Store.dur(key)
+        let start = pos > 0 && !Store.seen(key) && (dur == 0 || pos < dur * 9 / 10) ? pos : 0
+        return PlayRequest(title: item.name, key: key, kind: "vod",
+                           urls: playURLs(kind: "vod", id: id, ext: v?.ext ?? item.ext, key: key), startMs: start)
+    }
+
+    func setTmdbKey(_ k: String) {
+        Store.tmdbKey = k.trimmed
+        popVod = []
+        popSeries = []
+        updateExtras()
+    }
+
+    // ---------- séries suivies (Sorties) ----------
+    @Published private(set) var follows: [String: Follow] = Store.follows
+    @Published private(set) var followBusy = false
+    @Published private(set) var followInfo = ""
+
+    /// Nouveaux épisodes pas encore vus, par série.
+    var news: [String: [NewEp]] {
+        _ = progressTick
+        return follows.compactMapValues { f in
+            let l = f.fresh.filter { !Store.seen("ep:\($0.id)") }
+            return l.isEmpty ? nil : l
+        }
+    }
+
+    func setFollow(_ series: Item, info: ItemInfo?, on: Bool) {
+        var m = follows
+        if on {
+            m[series.key] = Follow(vid: series.id, known: (info?.episodes ?? []).map { epCode($0.season, $0.num) }, fresh: [])
+        } else {
+            m[series.key] = nil
+        }
+        follows = m
+        Store.saveFollows(m, changed: [series.key])
+    }
+
+    func clearNews() {
+        let m = follows.mapValues { Follow(vid: $0.vid, known: $0.known, fresh: []) }
+        follows = m
+        Store.saveFollows(m, changed: Array(m.keys))
+    }
+
+    /// Compare la liste des épisodes de chaque série suivie (au lancement, au plus toutes les 6 h, ou à la demande).
+    func checkFollows(force: Bool) {
+        guard let a = account, !followBusy else { return }
+        if follows.isEmpty { if force { followInfo = "Aucune série suivie." }; return }
+        if !force && Date().timeIntervalSince(Store.followCheck) < 6 * 3600 { return }
+        followBusy = true
+        Task {
+            let client = XtreamClient(a)
+            for k in Array(follows.keys) {
+                guard let cur = follows[k] else { continue }
+                let vid = derived.byKey[k]?.id ?? cur.vid
+                guard let inf = try? await client.info(type: "series", id: vid) else { continue }
+                infoCache[k] = inf
+                let upd = updateFollow(cur, vid: vid, eps: inf.episodes) { Store.seen("ep:\($0)") }
+                if follows[k] != nil && upd != cur {
+                    follows[k] = upd
+                    Store.saveFollows(follows, changed: [k])
+                }
+            }
+            Store.followCheck = Date()
+            let f = DateFormatter(); f.dateFormat = "HH:mm"
+            let n = news.values.reduce(0) { $0 + $1.count }
+            followInfo = "Vérifié à \(f.string(from: Date())) · " + (n == 0 ? "aucun nouvel épisode" : n == 1 ? "1 nouvel épisode" : "\(n) nouveaux épisodes")
+            followBusy = false
+        }
     }
 
     // ---------- fiches ----------
@@ -376,6 +545,8 @@ final class AppModel: ObservableObject {
         var r = PlayRequest(title: "\(series.name) · S\(e.season) É\(e.num) \(e.title)", key: e.key, kind: "series",
                             urls: playURLs(kind: "series", id: e.id, ext: e.ext, key: e.key), startMs: pos > 10_000 ? pos : 0)
         r.seriesId = series.id
+        // dernier épisode lancé : la série est suivie d'office (les prochains épisodes arriveront dans Sorties)
+        if e == info.episodes.last, follows[series.key] == nil { setFollow(series, info: info, on: true) }
         if let i = info.episodes.firstIndex(of: e), i + 1 < info.episodes.count {
             let n = info.episodes[i + 1]
             r.next = { [weak self] in self?.episodeRequest(series: series, info: info, episode: n, fromStart: true) }

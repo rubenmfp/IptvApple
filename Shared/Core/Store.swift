@@ -126,6 +126,26 @@ enum Store {
         stamp("lq|" + k)
     }
 
+    // ---------- clé TMDB (synchronisée) ----------
+    static var tmdbKey: String {
+        get { d.string(forKey: "tmdb") ?? "" }
+        set { if newValue != tmdbKey { d.set(newValue, forKey: "tmdb"); stamp("tmdb") } }
+    }
+
+    // ---------- séries suivies (cloche) : clé de la série -> suivi ----------
+    static var follows: [String: Follow] {
+        guard let data = d.data(forKey: "follows"), let m = try? JSONDecoder().decode([String: Follow].self, from: data) else { return [:] }
+        return m
+    }
+    static func saveFollows(_ m: [String: Follow], changed: [String]) {
+        if let data = try? JSONEncoder().encode(m) { d.set(data, forKey: "follows") }
+        for k in changed { stamp("fw|" + k) }
+    }
+    static var followCheck: Date {
+        get { d.object(forKey: "fchk") as? Date ?? .distantPast }
+        set { d.set(newValue, forKey: "fchk") }
+    }
+
     // ---------- dernier épisode lancé d'une série ----------
     static func lastEp(_ seriesId: Int) -> Int { d.integer(forKey: "last_\(seriesId)") }
     static func setLastEp(_ seriesId: Int, _ epId: Int) {
@@ -160,7 +180,7 @@ enum Store {
     /// Efface tout (déconnexion).
     static func reset() {
         for k in d.dictionaryRepresentation().keys where k.hasPrefix("p_") || k.hasPrefix("d_") || k.hasPrefix("s_") || k.hasPrefix("ext_") || k.hasPrefix("last_")
-            || k.hasPrefix("r_") || k.hasPrefix("lq_") || ["recent", "rlive", "stamps", "favs", "lists", "listOrder", "hcats", "prefq"].contains(k) {
+            || k.hasPrefix("r_") || k.hasPrefix("lq_") || ["recent", "rlive", "stamps", "favs", "lists", "listOrder", "hcats", "prefq", "follows", "fchk"].contains(k) {
             d.removeObject(forKey: k)
         }
     }

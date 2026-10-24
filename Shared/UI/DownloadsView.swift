@@ -108,6 +108,7 @@ struct DownloadTile: View {
 /// Onglet « Plus » (iPhone) : téléchargements et réglages.
 struct PlusView: View {
     @ObservedObject private var dl = DownloadManager.shared
+    @EnvironmentObject var model: AppModel
 
     var body: some View {
         NavigationStack {
@@ -121,6 +122,16 @@ struct PlusView: View {
                     ListsView()
                 } label: {
                     Label("Mes listes", systemImage: "heart")
+                }
+                NavigationLink {
+                    SortiesView()
+                } label: {
+                    HStack {
+                        Label("Sorties", systemImage: model.news.isEmpty ? "bell" : "bell.badge")
+                        Spacer()
+                        let n = model.news.count
+                        if n > 0 { Text(n == 1 ? "1 série" : "\(n) séries").font(.footnote).foregroundStyle(Theme.accent) }
+                    }
                 }
                 NavigationLink {
                     DownloadsView()

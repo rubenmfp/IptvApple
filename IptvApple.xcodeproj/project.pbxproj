@@ -10,6 +10,7 @@
 		038E271F5B844BA3B23D6E41 = {isa = PBXBuildFile; fileRef = CC58D22DB74DBEC900D37351 /* IptvApp.swift */; };
 		04645C452E44E5536C3E1905 = {isa = PBXBuildFile; fileRef = CD22A37155FA7EBED7CB2E77 /* AppModel.swift */; };
 		07D44FC8DD1BF2510CB51AAF = {isa = PBXBuildFile; fileRef = EBCB10DBD24ABE6B1E62A7D9 /* LiveView.swift */; };
+		091AA3D519C9260906C98F41 = {isa = PBXBuildFile; fileRef = 4EB3F054B9C6A61DA1AB43E5 /* Tmdb.swift */; };
 		0B50973819B8949CCDEEDDE9 = {isa = PBXBuildFile; fileRef = 8822A06E4CEB39F67FB2601B /* SettingsView.swift */; };
 		0E71252DBC8A86274A315308 = {isa = PBXBuildFile; fileRef = 9991A562AE8A88EC2FB04066 /* LoginView.swift */; };
 		12BF0FF8D2BF4FC855A83970 = {isa = PBXBuildFile; fileRef = 11CFB0D940EDDC54B2C5C697 /* JSONScan.swift */; };
@@ -25,6 +26,7 @@
 		2FAD89B8B9DAA10974434235 = {isa = PBXBuildFile; fileRef = 8822A06E4CEB39F67FB2601B /* SettingsView.swift */; };
 		3BF237F5DD569A4CB32A7F7F = {isa = PBXBuildFile; fileRef = E2FF77C67FF707E910F9E148 /* RootView.swift */; };
 		3DE356EC4C368DF6843C5EEE = {isa = PBXBuildFile; fileRef = B3A3B6DABEBF9688B6461C0D /* BrowseView.swift */; };
+		433C1C54E1C11B336DEB4069 = {isa = PBXBuildFile; fileRef = DBC2E8BD4168C6853B9808DE /* Follow.swift */; };
 		43B02D82A8F68BAF94D48195 = {isa = PBXBuildFile; fileRef = 1599A0C67162B8F3F6C721B6 /* RemoteImage.swift */; };
 		44F1ED56C0E374AD8F1E9FDD = {isa = PBXBuildFile; fileRef = C9F692B28932FB86BC9B79B2 /* PlayerView.swift */; };
 		4635FAD12D06B356EC803E6B = {isa = PBXBuildFile; fileRef = 93403CEB9EE43F0DF85AFE5C /* Downloads.swift */; };
@@ -36,6 +38,7 @@
 		733DE72C5F3FC5E674480C4C = {isa = PBXBuildFile; fileRef = 197BA6907AFEFF37500C056C /* Models.swift */; };
 		8146175EDD5ED757F83BB562 = {isa = PBXBuildFile; fileRef = 00838648B9FFCB9CF30FEFD8 /* Orientation.swift */; };
 		86C95C2FEC167E3266F6939D = {isa = PBXBuildFile; fileRef = C092905B600FDDDF852C33E1 /* Storage.swift */; };
+		88203AFA6A61BA9986E80777 = {isa = PBXBuildFile; fileRef = DBC2E8BD4168C6853B9808DE /* Follow.swift */; };
 		88BE50EDD76F5B86FEC0B4FC = {isa = PBXBuildFile; fileRef = 8D645A824BD508C49FB3EF52 /* Regex.swift */; };
 		8FCA85670FF5390816E22770 = {isa = PBXBuildFile; fileRef = 93403CEB9EE43F0DF85AFE5C /* Downloads.swift */; };
 		9CC7C8469BA28748DCFD6696 = {isa = PBXBuildFile; fileRef = B645520D9BD2FD3914711FB2 /* ItemSheet.swift */; };
@@ -49,6 +52,7 @@
 		B4252D27875BBC68C2B6345A = {isa = PBXBuildFile; fileRef = 96F0B84184345629440640E4 /* PlayerEngine.swift */; };
 		B653A0A84172D13F58BB819A = {isa = PBXBuildFile; fileRef = E2FF77C67FF707E910F9E148 /* RootView.swift */; };
 		B8147B51833C77101C1C39FC = {isa = PBXBuildFile; fileRef = CC58D22DB74DBEC900D37351 /* IptvApp.swift */; };
+		BDB7CF3919B0A627D915FECC = {isa = PBXBuildFile; fileRef = 4EB3F054B9C6A61DA1AB43E5 /* Tmdb.swift */; };
 		C996A9D79915369B4D4D14D9 = {isa = PBXBuildFile; fileRef = C49E7E82B4F027632C8DE828 /* Assets.xcassets */; };
 		CEBE78EE27330B9738ADAAC4 = {isa = PBXBuildFile; fileRef = 197BA6907AFEFF37500C056C /* Models.swift */; };
 		D391B99BB42B41660DC81E49 = {isa = PBXBuildFile; fileRef = 729E9D0A20C9583B0D5CA079 /* MobileVLCKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -95,6 +99,7 @@
 		197BA6907AFEFF37500C056C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		281095A9ADA163A7F1F49F5F = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IptvApple.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CC0E23D33CFD6FEC853907A = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		4EB3F054B9C6A61DA1AB43E5 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tmdb.swift; sourceTree = "<group>"; };
 		5C2546B2A6873006F860335F = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = TVVLCKit.xcframework; path = Frameworks/TVVLCKit.xcframework; sourceTree = "<group>"; };
 		719A6D22A33511DF231F0F04 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Names.swift; sourceTree = "<group>"; };
 		729E9D0A20C9583B0D5CA079 = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = MobileVLCKit.xcframework; path = Frameworks/MobileVLCKit.xcframework; sourceTree = "<group>"; };
@@ -117,6 +122,7 @@
 		CD22A37155FA7EBED7CB2E77 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		D211737BA42E0C52724D0D7B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		D43AD9BD33F76E3796E5C826 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchViews.swift; sourceTree = "<group>"; };
+		DBC2E8BD4168C6853B9808DE = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Follow.swift; sourceTree = "<group>"; };
 		E2FF77C67FF707E910F9E148 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		E479151C1109C6AF845A4DD0 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		EBCB10DBD24ABE6B1E62A7D9 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveView.swift; sourceTree = "<group>"; };
@@ -164,12 +170,14 @@
 			isa = PBXGroup;
 			children = (
 				904B9FB7B257D8EC2C57450D /* Epg.swift */,
+				DBC2E8BD4168C6853B9808DE /* Follow.swift */,
 				11CFB0D940EDDC54B2C5C697 /* JSONScan.swift */,
 				197BA6907AFEFF37500C056C /* Models.swift */,
 				719A6D22A33511DF231F0F04 /* Names.swift */,
 				8D645A824BD508C49FB3EF52 /* Regex.swift */,
 				C092905B600FDDDF852C33E1 /* Storage.swift */,
 				D211737BA42E0C52724D0D7B /* Store.swift */,
+				4EB3F054B9C6A61DA1AB43E5 /* Tmdb.swift */,
 				830C85F4CA0E986B02AE9B2B /* Xtream.swift */,
 			);
 			path = Core;
@@ -348,12 +356,14 @@
 				4635FAD12D06B356EC803E6B /* Downloads.swift in Sources */,
 				8146175EDD5ED757F83BB562 /* Orientation.swift in Sources */,
 				E83D3ECB2066A12531295B25 /* Epg.swift in Sources */,
+				433C1C54E1C11B336DEB4069 /* Follow.swift in Sources */,
 				12BF0FF8D2BF4FC855A83970 /* JSONScan.swift in Sources */,
 				733DE72C5F3FC5E674480C4C /* Models.swift in Sources */,
 				FC45E0304408CCE2AD03F2F9 /* Names.swift in Sources */,
 				88BE50EDD76F5B86FEC0B4FC /* Regex.swift in Sources */,
 				67EC8D894EE28AE6D7CFBE37 /* Storage.swift in Sources */,
 				5EFCC7B08456F148684C011C /* Store.swift in Sources */,
+				091AA3D519C9260906C98F41 /* Tmdb.swift in Sources */,
 				E44E7B148AE39B28E95D79A7 /* Xtream.swift in Sources */,
 				038E271F5B844BA3B23D6E41 /* IptvApp.swift in Sources */,
 				B4252D27875BBC68C2B6345A /* PlayerEngine.swift in Sources */,
@@ -379,12 +389,14 @@
 				8FCA85670FF5390816E22770 /* Downloads.swift in Sources */,
 				DB264689C49C97E58D060119 /* Orientation.swift in Sources */,
 				DDBEA351412C2CDC4418554A /* Epg.swift in Sources */,
+				88203AFA6A61BA9986E80777 /* Follow.swift in Sources */,
 				48D7E590A98B4A32F42559EF /* JSONScan.swift in Sources */,
 				CEBE78EE27330B9738ADAAC4 /* Models.swift in Sources */,
 				EDA9734B4BAEF45B85305535 /* Names.swift in Sources */,
 				F743FEAABC962770B97B3B5D /* Regex.swift in Sources */,
 				86C95C2FEC167E3266F6939D /* Storage.swift in Sources */,
 				5E3AEE5AA9DFD465FFDA6949 /* Store.swift in Sources */,
+				BDB7CF3919B0A627D915FECC /* Tmdb.swift in Sources */,
 				2CE6113DAA1392166F0EE339 /* Xtream.swift in Sources */,
 				B8147B51833C77101C1C39FC /* IptvApp.swift in Sources */,
 				2054B87FF4797FAAA28A08D1 /* PlayerEngine.swift in Sources */,
@@ -411,7 +423,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -421,7 +433,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.6;
+				MARKETING_VERSION = 0.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
@@ -439,7 +451,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -449,7 +461,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.6;
+				MARKETING_VERSION = 0.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple.tv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
@@ -466,7 +478,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -481,7 +493,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.6;
+				MARKETING_VERSION = 0.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -541,7 +553,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -556,7 +568,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.6;
+				MARKETING_VERSION = 0.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubenmfp.iptvapple;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

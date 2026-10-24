@@ -5,6 +5,8 @@ struct SettingsView: View {
     @State private var refreshDays = Prefs.refreshDays
     @State private var confirmLogout = false
     @State private var epgTick = 0
+    @State private var tmdbKey = Store.tmdbKey
+    @State private var tmdbTest = ""
 
     private var version: String {
         let i = Bundle.main.infoDictionary
@@ -53,6 +55,24 @@ struct SettingsView: View {
                         Text("Qualité préférée : \(Store.prefQuality) (la dernière choisie, proposée d'office)").foregroundStyle(Theme.dim)
                     }
                 }
+                Section("TMDB (facultatif)") {
+                    TextField("Clé TMDB (themoviedb.org > Paramètres > API)", text: $tmdbKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onSubmit { model.setTmdbKey(tmdbKey) }
+                    HStack(spacing: 20) {
+                        Button("Enregistrer") { model.setTmdbKey(tmdbKey) }
+                        Button("Tester la clé") {
+                            model.setTmdbKey(tmdbKey)
+                            Task { tmdbTest = await Tmdb.shared.test() }
+                        }
+                    }
+                    if !tmdbTest.isEmpty { Text(tmdbTest).foregroundStyle(Theme.dim) }
+                    Text("Avec une clé gratuite : notes TMDB sur les fiches et les affiches, résumé en français, date, durée, bande-annonce, "
+                         + "images des épisodes, photos des acteurs, rangées « Populaires · France ». "
+                         + "Ce produit utilise l'API TMDB mais n'est ni approuvé ni certifié par TMDB.")
+                        .font(.footnote).foregroundStyle(Theme.dim)
+                }
                 Section("Guide des programmes") {
                     Toggle("Charger à l'ouverture du Direct", isOn: Binding(get: { Prefs.epgAuto }, set: { Prefs.epgAuto = $0; epgTick += 1 }))
                     TextField("Adresse XMLTV (vide = celle du fournisseur)", text: Binding(get: { Prefs.epgUrl }, set: { Prefs.epgUrl = $0; epgTick += 1 }))
@@ -69,7 +89,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.6 : Direct complet (genres, liste des chaînes, guide des programmes).").foregroundStyle(Theme.dim)
+                    Text("Version 0.7 : Sorties, TMDB, recommandations.").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")

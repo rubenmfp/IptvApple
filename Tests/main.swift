@@ -147,6 +147,32 @@ check(cur?.title, "Journal & météo", "programme en cours")
 check(nxt?.title, "Film", "programme suivant")
 check(cur?.desc, "Infos", "description")
 
+// ---------- séries suivies ----------
+func ep(_ id: Int, _ s: Int, _ n: Int) -> Episode { Episode(id: id, title: "É\(n)", season: s, num: n, ext: "mkv", image: nil) }
+let f0 = Follow(vid: 1, known: ["1:1", "1:2"], fresh: [])
+let f1 = updateFollow(f0, vid: 1, eps: [ep(11, 1, 1), ep(12, 1, 2), ep(13, 1, 3), ep(21, 2, 1)]) { _ in false }
+check(f1.fresh.map(\.id), [13, 21], "nouveaux épisodes")
+check(f1.known.count, 4, "épisodes connus")
+let f2 = updateFollow(f1, vid: 1, eps: [ep(11, 1, 1), ep(12, 1, 2), ep(99, 1, 3), ep(21, 2, 1)]) { $0 == 21 }
+check(f2.fresh.map(\.id), [99], "identifiant changé suivi, épisode vu retiré")
+check(updateFollow(f1, vid: 1, eps: []) { _ in false }, f1, "réponse vide : rien ne change")
+
+// ---------- classements ----------
+check(normTitle("L'Été (2023) - FR"), "l ete", "titre normalisé")
+let catalogue = [film(1, "Dune : Deuxième partie", poster: "p"), film(2, "Oppenheimer", poster: "p"), film(3, "Sans affiche")]
+let pops = matchPopular([PopTitle(fr: "Oppenheimer", orig: "Oppenheimer", en: "Oppenheimer"),
+                         PopTitle(fr: "Dune : Deuxième partie", orig: "Dune: Part Two", en: "Dune: Part Two"),
+                         PopTitle(fr: "Sans affiche", orig: "", en: "")], catalogue)
+check(pops.map(\.id), [2, 1], "classement retrouvé dans l'ordre, sans titre sans affiche")
+
+// ---------- recommandations ----------
+var pool: [Item] = []
+for n in 0..<40 { var i = film(100 + n, "Film \(n)", poster: "p"); i.cat = n < 10 ? "Action" : "Drame"; pool.append(i) }
+let reco = recoList(pool: pool, all: pool, recent: ["vod:100"], favs: [], ratings: ["vod:101": 2], people: { _ in "" })
+check(reco.count, 15, "15 recommandations")
+check(reco.filter { $0.cat == "Action" }.count >= 8, true, "la catégorie aimée domine")
+check(reco.contains { $0.key == "vod:100" || $0.key == "vod:101" }, false, "titres déjà vus ou notés exclus")
+
 // ---------- lien M3U ----------
 let l1 = Xtream.parseLink("http://ex.com:8080/get.php?username=ab%40c&password=p+q&type=m3u_plus&output=ts")
 check(l1?.host, "http://ex.com:8080", "serveur du lien")

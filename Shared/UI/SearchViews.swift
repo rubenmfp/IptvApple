@@ -197,3 +197,64 @@ struct ListsView: View {
         }
     }
 }
+
+// MARK: - Sorties
+
+/// Sorties (cloche) : séries suivies et nouveaux épisodes. Une série quitte « Nouveaux épisodes » dès que ses nouveaux
+/// épisodes ont été regardés (à 90 %).
+struct SortiesView: View {
+    @EnvironmentObject var model: AppModel
+    @State private var selected: Selection?
+
+    var body: some View {
+        let news = model.news
+        let newItems = news.keys.compactMap { model.derived.byKey[$0] }.sorted { $0.name < $1.name }
+        let followed = model.follows.keys.compactMap { model.derived.byKey[$0] }.sorted { $0.name < $1.name }
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.tv ? 30 : 18) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Sorties").font(Theme.tv ? .title2.bold() : .title3.bold()).foregroundStyle(.white)
+                    Text("Sur la fiche d'une série, la cloche la met en suivi. Lancer le dernier épisode d'une série la suit d'office. "
+                         + "L'appli compare ensuite la liste des épisodes (au lancement, au plus toutes les 6 h, ou maintenant).")
+                        .font(.footnote).foregroundStyle(Theme.dim)
+                    HStack(spacing: Theme.tv ? 24 : 10) {
+                        Button { model.checkFollows(force: true) } label: {
+                            Label(model.followBusy ? "Vérification…" : "Vérifier maintenant", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(model.followBusy)
+                        if !news.isEmpty {
+                            Button { model.clearNews() } label: { Label("Tout marquer comme vu", systemImage: "checkmark") }
+                        }
+                    }
+                    #if os(iOS)
+                    .buttonStyle(.bordered)
+                    #endif
+                    if !model.followInfo.isEmpty { Text(model.followInfo).font(.footnote).foregroundStyle(Theme.dim) }
+                }
+                .padding(.horizontal, Theme.tv ? 80 : Theme.edge)
+
+                if !newItems.isEmpty {
+                    RowView(row: Row(id: "news", title: "Nouveaux épisodes", items: newItems)) { selected = Selection(item: $0) }
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(newItems, id: \.key) { s in
+                            let eps = news[s.key] ?? []
+                            Text("\(s.name) : " + eps.prefix(4).map { "S\($0.season) É\($0.num)" }.joined(separator: ", ")
+                                 + (eps.count > 4 ? "…" : ""))
+                                .font(.footnote).foregroundStyle(Theme.dim).lineLimit(1)
+                        }
+                    }
+                    .padding(.horizontal, Theme.tv ? 80 : Theme.edge)
+                }
+                if !followed.isEmpty {
+                    RowView(row: Row(id: "followed", title: "Séries suivies", items: followed)) { selected = Selection(item: $0) }
+                } else {
+                    Text("Aucune série suivie.").foregroundStyle(Theme.dim).padding(.horizontal, Theme.tv ? 80 : Theme.edge)
+                }
+            }
+            .padding(.vertical, Theme.tv ? 40 : 16)
+        }
+        .background(Theme.bg.ignoresSafeArea())
+        .navigationTitle("Sorties")
+        .itemDetail($selected)
+    }
+}

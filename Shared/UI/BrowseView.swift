@@ -242,6 +242,14 @@ struct PosterCard: View {
     let item: Item
     var resume = false
     let action: () -> Void
+    @State private var tmdbRate: Double?
+
+    /// Note affichée : celle de TMDB (comme sur la fiche), sinon celle du fournisseur.
+    private var shownRate: Double? {
+        if let r = tmdbRate, r > 0 { return r }
+        if tmdbRate == nil || tmdbRate == -1 || tmdbRate == 0 { return item.rating > 0 ? item.rating : nil }
+        return nil
+    }
 
     private var w: CGFloat { Theme.posterWidth }
     private var badge: String? {
@@ -258,6 +266,17 @@ struct PosterCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: Theme.tv ? 12 : 8))
                     .overlay(alignment: .topTrailing) {
                         if let b = badge { QualityBadge(text: b).padding(6) }
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        if let r = shownRate {
+                            Text("★ " + fmtRating(r))
+                                .font(.system(size: Theme.tv ? 16 : 9, weight: .bold))
+                                .foregroundStyle(Theme.gold)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 4))
+                                .padding(Theme.tv ? 8 : 4)
+                                .padding(.bottom, AppModel.progress(of: item) != nil ? 4 : 0)
+                        }
                     }
                     .overlay(alignment: .bottom) {
                         if let p = AppModel.progress(of: item), p.dur > 0 {
@@ -278,6 +297,13 @@ struct PosterCard: View {
             #endif
             // appui long : favoris, listes ; dans « Reprendre » : retirer
             .contextMenu { ItemMenu(item: item, resume: resume) }
+            .task(id: item.key) {
+                guard Tmdb.enabled else { return }
+                if let c = await Tmdb.shared.cachedRate(item.key) { tmdbRate = c; return }
+                try? await Task.sleep(nanoseconds: 400_000_000)      // pas de requête pendant un défilement rapide
+                if Task.isCancelled { return }
+                tmdbRate = await Tmdb.shared.rate(item)
+            }
             Text(item.name)
                 .font(Theme.tv ? .caption : .caption2)
                 .foregroundStyle(Theme.dim)

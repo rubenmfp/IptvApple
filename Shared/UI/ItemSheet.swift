@@ -19,12 +19,16 @@ struct ItemSheet: View {
     init(item: Item) { _item = State(initialValue: item) }
 
     private var isSeries: Bool { item.type == "series" }
+    private var newIds: Set<Int> { Set(model.news[item.key]?.map(\.id) ?? []) }
     /// Version choisie, sinon la qualité préférée (la dernière choisie ailleurs), sinon la meilleure.
     private var chosen: Variant? {
         variant ?? item.variants.first { $0.q == Store.prefQuality } ?? item.variants.first
     }
     @State private var person: String?
     @State private var rating = 0
+    @State private var tmdb: TmdbInfo?
+    @State private var photos: [String: String] = [:]
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -76,6 +80,35 @@ struct ItemSheet: View {
         if isSeries, let i = info {
             season = AppModel.episodeToPlay(seriesId: item.id, info: i)?.0.season ?? i.seasons.first
         }
+        await loadTmdb()
+    }
+
+    /// Avec une clé TMDB : note et votes, résumé en français, date, durée, bande-annonce, photos, images des épisodes.
+    private func loadTmdb() async {
+        tmdb = nil
+        photos = [:]
+        guard Tmdb.enabled else { return }
+        let key = item.key
+        guard let t = await Tmdb.shared.details(type: item.type, tmdbId: info?.tmdb ?? item.tmdb, title: item.name, year: item.year),
+              key == item.key else { return }
+        tmdb = t
+        if var i = info {
+            if !t.overview.isEmpty { i.plot = t.overview }
+            if i.runtime == 0 { i.runtime = t.runtime }
+            if i.releaseDate.isEmpty { i.releaseDate = t.date }
+            if isSeries {
+                for s in i.seasons where i.episodes.contains(where: { $0.season == s && $0.image == nil }) {
+                    let st = await Tmdb.shared.seasonStills(tvId: t.id, season: s)
+                    for k in i.episodes.indices where i.episodes[k].season == s && i.episodes[k].image == nil {
+                        i.episodes[k].image = st[i.episodes[k].num]
+                    }
+                }
+            }
+            if key == item.key { info = i }
+        }
+        var ph: [String: String] = [:]
+        for p in t.cast + t.directors { if let u = p.photo { ph[p.name.lowercased()] = u } }
+        photos = ph
     }
 
     // MARK: - En-tête
@@ -95,7 +128,7 @@ struct ItemSheet: View {
         var parts: [String] = []
         if item.year > 0 { parts.append(String(item.year)) }
         else if let d = info?.releaseDate, d.count >= 4 { parts.append(String(d.prefix(4))) }
-        if let r = info?.runtime, r > 0, !isSeries { parts.append(r >= 60 ? "\(r / 60) h \(String(format: "%02d", r % 60))" : "\(r) min") }
+        if let r = info?.runtime ?? tmdb?.runtime, r > 0, !isSeries { parts.append(r >= 60 ? "\(r / 60) h \(String(format: "%02d", r % 60))" : "\(r) min") }
         if isSeries, let i = info, !i.seasons.isEmpty { parts.append(i.seasons.count == 1 ? "1 saison" : "\(i.seasons.count) saisons") }
         if let g = info?.genre, !g.isEmpty { parts.append(g) }
         return parts.joined(separator: " · ")
@@ -113,7 +146,12 @@ struct ItemSheet: View {
                     .foregroundStyle(.white)
                 HStack(spacing: 10) {
                     Text(isSeries ? "Série" : "Film").foregroundStyle(Theme.accent).fontWeight(.semibold)
-                    if item.rating > 0 { Text("★ " + fmtRating(item.rating)).foregroundStyle(Theme.gold) }
+                    if let t = tmdb, t.rating > 0 {
+                        Text("★ " + fmtRating(t.rating)).foregroundStyle(Theme.gold)
+                        Text("\(t.votes) votes TMDB").foregroundStyle(Theme.dim)
+                    } else if item.rating > 0 {
+                        Text("★ " + fmtRating(item.rating)).foregroundStyle(Theme.gold)
+                    }
                 }
                 .font(Theme.tv ? .callout : .subheadline)
                 if !meta.isEmpty { Text(meta).font(Theme.tv ? .callout : .footnote).foregroundStyle(Theme.dim) }
@@ -184,6 +222,15 @@ struct ItemSheet: View {
             #endif
             #if os(tvOS)
             ratingButtons
+            if isSeries {
+                let on = model.follows[item.key] != nil
+                Button { model.setFollow(item, info: info, on: !on) } label: {
+                    Label(on ? "Suivie" : "Suivre", systemImage: on ? "bell.fill" : "bell").labelStyle(.iconOnly)
+                }
+            }
+            if let t = tmdb?.trailer {
+                Button { openTrailer(t) } label: { Label("Bande-annonce", systemImage: "film").labelStyle(.iconOnly) }
+            }
             #endif
             Button {
                 Store.toggleFav(item.key)
@@ -267,6 +314,15 @@ struct ItemSheet: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 52)
                 }
+                if isSeries {
+                    let on = model.follows[item.key] != nil
+                    ActionTile(icon: on ? "bell.fill" : "bell", text: on ? "Suivie" : "Suivre", on: on) {
+                        model.setFollow(item, info: info, on: !on)
+                    }
+                }
+                if let t = tmdb?.trailer {
+                    ActionTile(icon: "film", text: "Bande-annonce") { openTrailer(t) }
+                }
                 ActionTile(icon: fav ? "heart.fill" : "heart", text: fav ? "Dans mes favoris" : "Favoris", on: fav) {
                     Store.toggleFav(item.key)
                     fav = Store.isFav(item.key)
@@ -283,6 +339,16 @@ struct ItemSheet: View {
                 season: e.season, num: e.num)
     }
     #endif
+
+    /// Bande-annonce dans l'appli YouTube (ou le navigateur sur iPhone).
+    private func openTrailer(_ key: String) {
+        #if os(tvOS)
+        if let u = URL(string: "youtube://watch/\(key)") { openURL(u) }
+        #else
+        if let u = URL(string: "youtube://www.youtube.com/watch?v=\(key)"), UIApplication.shared.canOpenURL(u) { openURL(u) }
+        else if let u = URL(string: "https://www.youtube.com/watch?v=\(key)") { openURL(u) }
+        #endif
+    }
 
     private func startFilm(at ms: Int) {
         guard let v = chosen else { return }
@@ -346,7 +412,7 @@ struct ItemSheet: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 40) {
                         ForEach(eps, id: \.id) { e in
-                            EpisodeCard(episode: e, fallback: item.poster) { play = model.episodeRequest(series: item, info: i, episode: e) }
+                            EpisodeCard(episode: e, fallback: item.poster, isNew: newIds.contains(e.id)) { play = model.episodeRequest(series: item, info: i, episode: e) }
                         }
                     }
                     .padding(.horizontal, 80)
@@ -367,11 +433,11 @@ struct ItemSheet: View {
                     #endif
                     ForEach(eps, id: \.id) { e in
                         #if os(iOS)
-                        EpisodeRow(episode: e, fallback: item.poster, download: episodeDownload(e)) {
+                        EpisodeRow(episode: e, fallback: item.poster, isNew: newIds.contains(e.id), download: episodeDownload(e)) {
                             play = model.episodeRequest(series: item, info: i, episode: e)
                         }
                         #else
-                        EpisodeRow(episode: e, fallback: item.poster) { play = model.episodeRequest(series: item, info: i, episode: e) }
+                        EpisodeRow(episode: e, fallback: item.poster, isNew: newIds.contains(e.id)) { play = model.episodeRequest(series: item, info: i, episode: e) }
                         #endif
                     }
                 }
@@ -405,12 +471,18 @@ struct ItemSheet: View {
                     HStack(spacing: Theme.tv ? 20 : 8) {
                         ForEach(Array(list.prefix(15)), id: \.self) { n in
                             Button { person = n } label: {
-                                Text(n).font(Theme.tv ? .callout : .footnote).lineLimit(1)
-                                    #if os(iOS)
-                                    .padding(.horizontal, 12).padding(.vertical, 7)
-                                    .background(Color.white.opacity(0.1), in: Capsule())
-                                    .foregroundStyle(Theme.light)
-                                    #endif
+                                HStack(spacing: 8) {
+                                    // photo de la personne (TMDB) quand elle est connue
+                                    if let u = photos[n.lowercased()] {
+                                        RemoteImage(url: u, px: 120).frame(width: Theme.tv ? 56 : 28, height: Theme.tv ? 56 : 28).clipShape(Circle())
+                                    }
+                                    Text(n).font(Theme.tv ? .callout : .footnote).lineLimit(1)
+                                }
+                                #if os(iOS)
+                                .padding(.horizontal, 12).padding(.vertical, photos[n.lowercased()] == nil ? 7 : 4)
+                                .background(Color.white.opacity(0.1), in: Capsule())
+                                .foregroundStyle(Theme.light)
+                                #endif
                             }
                             #if os(iOS)
                             .buttonStyle(.plain)
@@ -471,6 +543,7 @@ private func episodeProgress(_ e: Episode) -> Double? {
 struct EpisodeRow: View {
     let episode: Episode
     let fallback: String?
+    var isNew = false
     #if os(iOS)
     var download: DLEntry? = nil
     #endif
@@ -504,6 +577,7 @@ struct EpisodeRow: View {
                 .frame(width: 132, height: 74)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
+                        if isNew { NewTag() }
                         Text("\(episode.num). \(episode.title)").font(.subheadline.bold()).foregroundStyle(.white).lineLimit(2)
                         if Store.seen(episode.key) { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.dim).font(.caption) }
                     }
@@ -522,6 +596,7 @@ struct EpisodeRow: View {
 struct EpisodeCard: View {
     let episode: Episode
     let fallback: String?
+    var isNew = false
     let action: () -> Void
 
     var body: some View {
@@ -546,6 +621,7 @@ struct EpisodeCard: View {
                             Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(.white).padding(10)
                         }
                     }
+                    .overlay(alignment: .topLeading) { if isNew { NewTag().padding(10) } }
             }
             #if os(tvOS)
             .buttonStyle(.card)
@@ -558,3 +634,13 @@ struct EpisodeCard: View {
 }
 
 struct PersonRef: Identifiable { let name: String; var id: String { name } }
+
+/// Étiquette « NOUVEAU » d'un épisode sorti depuis le suivi de la série.
+struct NewTag: View {
+    var body: some View {
+        Text("NOUVEAU").font(.system(size: Theme.tv ? 16 : 9, weight: .heavy))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 4))
+            .foregroundStyle(.white)
+    }
+}

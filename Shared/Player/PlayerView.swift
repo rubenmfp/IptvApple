@@ -29,7 +29,7 @@ struct VideoSurface: UIViewRepresentable {
 
 /// Éléments sélectionnables du lecteur (Apple TV).
 enum PlayerFocus: Hashable { case surface, timeline, back, play, forward, audio, subtitles, speed, aspect, rotation, next,
-    chanList, chanPrev, chanNext, quality, chanPanel }
+    chanList, chanPrev, chanNext, quality, chanPanel, reco(Int) }
 
 /// Panneaux d'options (Apple TV).
 enum OptionPanel: Equatable {
@@ -47,6 +47,8 @@ struct PlayerView: View {
     @State private var req: PlayRequest
     var onClose: () -> Void = {}
     @State private var nextDismissed = false
+    @State private var recoDismissed = false
+    @State private var recos: [Item] = []
     @EnvironmentObject private var model: AppModel
     /// Direct : liste des chaînes ouverte par-dessus l'image (la chaîne en cours continue), bandeau d'information.
     @State private var chanPanel = false
@@ -90,6 +92,10 @@ struct PlayerView: View {
             if controls { controlsLayer.transition(.opacity) }
             if let title = req.nextTitle, req.next != nil, !nextDismissed {
                 NextEpisodeOverlay(clock: engine.clock, title: title, focus: $focus, controlsShown: controls) { goNext() }
+            }
+            // film : pendant le générique, quatre titres à regarder ensuite
+            if req.kind == "vod", req.next == nil, !recoDismissed, !recos.isEmpty {
+                RecoOverlay(clock: engine.clock, items: recos, focus: $focus, controlsShown: controls) { startReco($0) }
             }
             #if os(tvOS)
             if let p = panel { optionPanel(p).transition(.move(edge: .trailing).combined(with: .opacity)) }
@@ -135,6 +141,7 @@ struct PlayerView: View {
             if chanPanel { closeChannels() }
             else if panel != nil { closePanel() }
             else if focus == .next { nextDismissed = true; focus = .surface }
+            else if case .some(.reco) = focus { recoDismissed = true; focus = .surface }
             else if controls, engine.phase != .opening, !isFailed { hideControls() } else { close() }
         }
         .onPlayPauseCommand { engine.togglePause(); showControls() }
@@ -368,6 +375,7 @@ struct PlayerView: View {
         // iPhone : « Plein écran » par défaut (beaucoup de films ont des bandes noires incrustées), puis le dernier choix
         engine.defaultAspect = PlayerEngine.Aspect(rawValue: Prefs.aspect) ?? .fill
         #endif
+        if req.kind == "vod" { recos = model.recommendations(after: req.key) }
         startPlayback(req)
         showControls()
     }
@@ -400,6 +408,19 @@ struct PlayerView: View {
     }
 
     /// Épisode suivant : l'épisode en cours est noté comme vu, puis le suivant démarre dans le même lecteur.
+    /// Lance un film des recommandations sans quitter le lecteur.
+    private func startReco(_ item: Item) {
+        saveProgress()
+        let n = model.filmRequest(item)
+        engine.stop()
+        recoDismissed = false
+        recos = model.recommendations(after: n.key)
+        req = n
+        // une seule connexion autorisée : petite pause entre la fermeture et l'ouverture
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { startPlayback(n) }
+        showControls()
+    }
+
     private func goNext() {
         guard let make = req.next, let n = make() else { close(); return }
         if engine.durationMs > 0 { Store.setProgress(req.key, pos: engine.durationMs, dur: engine.durationMs) }
@@ -752,6 +773,71 @@ struct NextEpisodeOverlay: View {
         .onChange(of: visible) { _, v in
             // Apple TV : OK lance tout de suite l'épisode suivant, Retour masque le bouton
             if v { DispatchQueue.main.async { focus.wrappedValue = .next } }
+        }
+        #endif
+    }
+}
+
+/// Film : « À regarder ensuite » pendant le générique estimé (5 % du film, entre 30 s et 6 min), quatre affiches.
+struct RecoOverlay: View {
+    @ObservedObject var clock: PlaybackClock
+    let items: [Item]
+    var focus: FocusState<PlayerFocus?>.Binding
+    let controlsShown: Bool
+    let pick: (Item) -> Void
+    @State private var open = false
+
+    private var visible: Bool {
+        guard clock.durationMs > 10 * 60_000 else { return false }
+        let window = min(max(clock.durationMs * 5 / 100, 30_000), 360_000)
+        let left = clock.durationMs - clock.timeMs
+        return left > 0 && left < window
+    }
+    private var w: CGFloat { Theme.tv ? 170 : 74 }
+
+    var body: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                if visible {
+                    VStack(alignment: .trailing, spacing: Theme.tv ? 14 : 8) {
+                        Text("À regarder ensuite").font(Theme.tv ? .headline : .caption.bold()).foregroundStyle(.white)
+                            .shadow(color: .black, radius: 3)
+                        HStack(spacing: Theme.tv ? 24 : 8) {
+                            ForEach(Array(items.prefix(4).enumerated()), id: \.element.key) { n, i in
+                                Button { pick(i) } label: {
+                                    RemoteImage(url: i.poster, px: Int(w * 2), fallback: i.name)
+                                        .frame(width: w, height: w * 1.5)
+                                        .clipped()
+                                        .overlay(alignment: .bottom) {
+                                            Text(i.name).font(.system(size: Theme.tv ? 15 : 9, weight: .semibold)).lineLimit(1)
+                                                .foregroundStyle(.white).padding(4).frame(maxWidth: .infinity)
+                                                .background(Color.black.opacity(0.65))
+                                        }
+                                        .clipShape(RoundedRectangle(cornerRadius: Theme.tv ? 10 : 6))
+                                }
+                                #if os(tvOS)
+                                .buttonStyle(.card)
+                                #else
+                                .buttonStyle(PressStyle())
+                                #endif
+                                .focused(focus, equals: .reco(n))
+                            }
+                        }
+                    }
+                    .padding(Theme.tv ? 24 : 10)
+                    .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: Theme.tv ? 18 : 12))
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .padding(.trailing, Theme.tv ? 80 : 16)
+            .padding(.bottom, controlsShown ? (Theme.tv ? 260 : 150) : (Theme.tv ? 70 : 30))
+        }
+        .animation(.easeOut(duration: 0.3), value: visible)
+        #if os(tvOS)
+        .onChange(of: visible) { _, v in
+            if v { DispatchQueue.main.async { focus.wrappedValue = .reco(0) } }
         }
         #endif
     }

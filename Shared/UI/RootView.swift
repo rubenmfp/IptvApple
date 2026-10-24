@@ -30,13 +30,13 @@ struct MainTabs: View {
                 .tabItem { Image(systemName: "magnifyingglass") }
                 .tag(0)
             #endif
-            BrowseView(rows: [model.resumeRow(nil), model.favoritesRow(nil)].compactMap { $0 } + model.derived.home, hero: model.derived.heroHome)
+            BrowseView(rows: model.rows(for: "home"), hero: model.hero(for: "home"))
                 .tabItem { Label("Accueil", systemImage: "house") }
                 .tag(1)
-            BrowseView(rows: [model.resumeRow("vod"), model.favoritesRow("vod")].compactMap { $0 } + model.derived.vod, hero: model.derived.heroVod)
+            BrowseView(rows: model.rows(for: "vod"), hero: model.hero(for: "vod"))
                 .tabItem { Label("Films", systemImage: "film") }
                 .tag(2)
-            BrowseView(rows: [model.resumeRow("series"), model.favoritesRow("series")].compactMap { $0 } + model.derived.series, hero: model.derived.heroSeries)
+            BrowseView(rows: model.rows(for: "series"), hero: model.hero(for: "series"))
                 .tabItem { Label("Séries", systemImage: "tv") }
                 .tag(3)
             LiveView()
@@ -46,8 +46,8 @@ struct MainTabs: View {
             NavigationStack { ListsView() }
                 .tabItem { Image(systemName: "heart") }
                 .tag(6)
-            ComingSoon(title: "Sorties", step: "à l'étape 7")
-                .tabItem { Image(systemName: "bell") }
+            SortiesView()
+                .tabItem { Image(systemName: model.news.isEmpty ? "bell" : "bell.badge") }
                 .tag(7)
             NavigationStack { SettingsView() }
                 .tabItem { Image(systemName: "gearshape") }
