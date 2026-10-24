@@ -39,7 +39,9 @@ jobs:
           key: vlckit-${{ hashFiles('tools/fetch_vlckit.sh') }}
 
       - name: VLCKit
-        run: tools/fetch_vlckit.sh
+        run: |
+          tools/fetch_vlckit.sh > vlc.log 2>&1 || { cat vlc.log; tail -30 vlc.log | sed 's/^/::error title=VLCKit::/'; exit 1; }
+          cat vlc.log
 
       - name: Tests du code commun
         run: |

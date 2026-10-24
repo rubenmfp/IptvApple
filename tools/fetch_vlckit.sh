@@ -18,7 +18,7 @@ fetch() {  # nom url sha256
   for d in "$fw"/ios-arm64_armv7_armv7s "$fw"/tvos-arm64; do
     [ -d "$d" ] || continue
     local bin="$d/$name.framework/$name"
-    if lipo -info "$bin" | grep -q armv7; then lipo -thin arm64 "$bin" -output "$bin.arm64" && mv "$bin.arm64" "$bin"; fi
+    if lipo -archs "$bin" | grep armv7 >/dev/null; then lipo -thin arm64 "$bin" -output "$bin.arm64" && mv "$bin.arm64" "$bin"; fi
   done
   mv "$fw" "Frameworks/$name.xcframework"
   rm -rf "$tmp"
