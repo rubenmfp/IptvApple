@@ -1,16 +1,13 @@
-set -x
 cd "$RUNNER_TEMP"
-curl -sL -o m.tar.xz https://download.videolan.org/pub/cocoapods/prod/MobileVLCKit-3.0-20260922-1512.tar.xz
 curl -sL -o t.tar.xz https://download.videolan.org/cocoapods/prod/TVVLCKit-3.0-20260930-0854.tar.xz
-ls -la *.tar.xz; shasum -a 256 *.tar.xz
-mkdir m t; tar xf m.tar.xz -C m; tar xf t.tar.xz -C t
-find m t -maxdepth 4 | head -60
-du -sh m t
-for x in m t; do
-  fw=$(find $x -name "*.xcframework" -maxdepth 3 | head -1)
-  echo "== $fw"; plutil -p $fw/Info.plist | head -60
-  for b in $(find $fw -maxdepth 3 -name "*.framework"); do
-    n=$(basename $b .framework); echo "-- $b"; file $b/$n; ls $b; ls $b/Modules 2>/dev/null && cat $b/Modules/module.modulemap
-    lipo -info $b/$n; otool -l $b/$n 2>/dev/null | grep -A4 -m2 "LC_BUILD_VERSION\|LC_VERSION_MIN" | head -12
-  done
-done
+mkdir t; tar xf t.tar.xz -C t
+find t -maxdepth 3 -not -path "*/doc/*" -not -path "*Sample*" | head -30
+fw=$(find t -name "*.xcframework" -maxdepth 3 | head -1)
+plutil -p $fw/Info.plist | grep -E "LibraryIdentifier|LibraryPath"
+for b in $(find $fw -maxdepth 2 -name "*.framework"); do n=$(basename $b .framework); file $b/$n | head -3; ls $b; done
+H=$(find $fw -path "*appletvos*" -o -path "*tvos-arm64*" | grep "Headers$" | head -1)
+[ -z "$H" ] && H=$(find $fw -name Headers -type d | head -1)
+echo "HEADERS $H"; ls $H
+grep -nE "@property|^- \(|^typedef|VLCMediaPlayerState[A-Z]" $H/VLCMediaPlayer.h | head -150
+grep -nE "@property|^- \(|^\+ \(" $H/VLCMedia.h | head -60
+grep -nE "@property|^- \(|^\+ \(" $H/VLCTime.h | head -30
