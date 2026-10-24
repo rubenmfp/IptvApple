@@ -26,7 +26,7 @@ struct ItemSheet: View {
                         Text(item.cat).foregroundStyle(Theme.dim)
                         if item.type == "vod" {
                             Text("Versions").font(.headline).foregroundStyle(Theme.light).padding(.top, 6)
-                            HStack(spacing: 8) {
+                            HStack(spacing: Theme.tv ? 14 : 8) {
                                 ForEach(item.variants, id: \.id) { v in
                                     QualityBadge(text: v.q == "?" ? "Standard" : v.q)
                                 }
@@ -47,6 +47,18 @@ struct ItemSheet: View {
             }
             .padding(Theme.tv ? 60 : 20)
         }
-        .background(Theme.bg.ignoresSafeArea())
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background {
+            ZStack {
+                Theme.bg
+                #if os(tvOS)
+                RemoteImage(url: item.poster, px: 600)
+                    .blur(radius: 60)
+                    .opacity(0.35)
+                    .overlay(LinearGradient(colors: [Theme.bg.opacity(0.2), Theme.bg], startPoint: .top, endPoint: .bottom))
+                #endif
+            }
+            .ignoresSafeArea()
+        }
     }
 }

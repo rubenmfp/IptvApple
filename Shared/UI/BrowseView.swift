@@ -40,9 +40,16 @@ struct BrowseView: View {
             }
         }
         .background(Theme.bg.ignoresSafeArea())
+        #if os(tvOS)
+        // sur la TV, une feuille s'affiche en petit panneau central : la fiche prend tout l'écran
+        .fullScreenCover(item: $selected) { s in
+            ItemSheet(item: s.item)
+        }
+        #else
         .sheet(item: $selected) { s in
             ItemSheet(item: s.item)
         }
+        #endif
     }
 }
 
