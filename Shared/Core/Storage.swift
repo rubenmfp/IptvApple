@@ -43,6 +43,7 @@ enum Files {
     }
     static var catalog: URL { dir.appendingPathComponent("catalog.json") }
     static var status: URL { dir.appendingPathComponent("status.json") }
+    static var people: URL { dir.appendingPathComponent("people.json") }
 
     static func save<T: Encodable>(_ v: T, to u: URL) {
         guard let d = try? JSONEncoder().encode(v) else { return }

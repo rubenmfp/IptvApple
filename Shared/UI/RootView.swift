@@ -12,15 +12,24 @@ struct RootView: View {
             }
         }
         .background(Theme.bg.ignoresSafeArea())
+        .tint(Theme.accent)
+        .id(model.appearance)          // couleur d'accent changée : tout est redessiné
     }
 }
 
 struct MainTabs: View {
     @EnvironmentObject var model: AppModel
     @State private var tab = 1
+    @State private var newName = ""
 
     var body: some View {
         TabView(selection: $tab) {
+            #if os(tvOS)
+            // Apple TV : la loupe en premier, puis Accueil, Films, Séries, Direct, puis cœur, cloche, molette
+            SearchView()
+                .tabItem { Image(systemName: "magnifyingglass") }
+                .tag(0)
+            #endif
             BrowseView(rows: [model.resumeRow(nil), model.favoritesRow(nil)].compactMap { $0 } + model.derived.home, hero: model.derived.heroHome)
                 .tabItem { Label("Accueil", systemImage: "house") }
                 .tag(1)
@@ -34,6 +43,12 @@ struct MainTabs: View {
                 .tabItem { Label("Direct", systemImage: "dot.radiowaves.left.and.right") }
                 .tag(4)
             #if os(tvOS)
+            NavigationStack { ListsView() }
+                .tabItem { Image(systemName: "heart") }
+                .tag(6)
+            ComingSoon(title: "Sorties", step: "à l'étape 7")
+                .tabItem { Image(systemName: "bell") }
+                .tag(7)
             NavigationStack { SettingsView() }
                 .tabItem { Image(systemName: "gearshape") }
                 .tag(5)
@@ -42,6 +57,17 @@ struct MainTabs: View {
                 .tabItem { Label("Plus", systemImage: "ellipsis") }
                 .tag(5)
             #endif
+        }
+        .alert("Nouvelle liste", isPresented: Binding(get: { model.newListFor != nil }, set: { if !$0 { model.newListFor = nil } })) {
+            TextField("Nom de la liste", text: $newName)
+            Button("Créer") {
+                model.createList(newName, with: model.newListFor)
+                newName = ""
+                model.newListFor = nil
+            }
+            Button("Annuler", role: .cancel) { newName = ""; model.newListFor = nil }
+        } message: {
+            if let i = model.newListFor { Text("« \(i.name) » y sera ajouté.") }
         }
     }
 }

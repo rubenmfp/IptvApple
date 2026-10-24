@@ -48,6 +48,76 @@ enum Store {
         stamp("fav|" + k)
     }
 
+    // ---------- listes personnelles : nom -> clés (ordre conservé) ----------
+    static var listNames: [String] { (d.array(forKey: "listOrder") as? [String]) ?? Array(lists.keys).sorted() }
+    static var lists: [String: [String]] {
+        guard let s = d.string(forKey: "lists"), let data = s.data(using: .utf8),
+              let m = try? JSONSerialization.jsonObject(with: data) as? [String: [String]] else { return [:] }
+        return m
+    }
+    static func saveLists(_ m: [String: [String]], order: [String]) {
+        if let data = try? JSONSerialization.data(withJSONObject: m), let s = String(data: data, encoding: .utf8) { d.set(s, forKey: "lists") }
+        d.set(order.filter { m[$0] != nil }, forKey: "listOrder")
+        stamp("lists")
+    }
+    static func inList(_ name: String, _ k: String) -> Bool { lists[name]?.contains(k) ?? false }
+    static func toggleInList(_ name: String, _ k: String) {
+        var m = lists
+        var l = m[name] ?? []
+        if l.contains(k) { l.removeAll { $0 == k } } else { l.insert(k, at: 0) }
+        m[name] = l
+        saveLists(m, order: listNames.contains(name) ? listNames : listNames + [name])
+    }
+    static func createList(_ name: String) {
+        var m = lists
+        guard !name.trimmed.isEmpty, m[name] == nil else { return }
+        m[name] = []
+        saveLists(m, order: listNames + [name])
+    }
+    static func deleteList(_ name: String) {
+        var m = lists
+        m[name] = nil
+        saveLists(m, order: listNames.filter { $0 != name })
+    }
+
+    // ---------- notes : -1 je n'aime pas, 1 j'aime, 2 j'adore ----------
+    static func rating(_ k: String) -> Int { d.integer(forKey: "r_" + k) }
+    static func setRating(_ k: String, _ v: Int) {
+        if v == 0 { d.removeObject(forKey: "r_" + k) } else { d.set(v, forKey: "r_" + k) }
+        stamp("rate|" + k)
+    }
+    static var allRatings: [String: Int] {
+        var m: [String: Int] = [:]
+        for (k, v) in d.dictionaryRepresentation() where k.hasPrefix("r_") { m[String(k.dropFirst(2))] = v as? Int ?? 0 }
+        return m
+    }
+
+    // ---------- qualité préférée (la dernière choisie, proposée d'office) ----------
+    static var prefQuality: String {
+        get { d.string(forKey: "prefq") ?? "" }
+        set { if newValue != prefQuality { d.set(newValue, forKey: "prefq"); stamp("prefq") } }
+    }
+
+    // ---------- catégories masquées : « vod|nom », « series|nom », « live|nom » ----------
+    static var hiddenCats: Set<String> {
+        get { Set(d.stringArray(forKey: "hcats") ?? []) }
+        set { d.set(Array(newValue).sorted(), forKey: "hcats"); stamp("hcats") }
+    }
+
+    // ---------- couleur d'accent : indice dans la palette, ou la couleur personnalisée (teinte, saturation) ----------
+    static var accent: Int {
+        get { d.integer(forKey: "accent") }
+        set { d.set(newValue, forKey: "accent"); stamp("accent") }
+    }
+    static var customHue: Double {
+        get { d.object(forKey: "chue") as? Double ?? 200 }
+        set { d.set(newValue, forKey: "chue"); stamp("chue") }
+    }
+    static var customSat: Double {
+        get { d.object(forKey: "csat") as? Double ?? 0.8 }
+        set { d.set(newValue, forKey: "csat"); stamp("csat") }
+    }
+
     // ---------- dernier épisode lancé d'une série ----------
     static func lastEp(_ seriesId: Int) -> Int { d.integer(forKey: "last_\(seriesId)") }
     static func setLastEp(_ seriesId: Int, _ epId: Int) {
@@ -82,7 +152,7 @@ enum Store {
     /// Efface tout (déconnexion).
     static func reset() {
         for k in d.dictionaryRepresentation().keys where k.hasPrefix("p_") || k.hasPrefix("d_") || k.hasPrefix("s_") || k.hasPrefix("ext_") || k.hasPrefix("last_")
-            || ["recent", "rlive", "stamps", "favs"].contains(k) {
+            || k.hasPrefix("r_") || ["recent", "rlive", "stamps", "favs", "lists", "listOrder", "hcats", "prefq"].contains(k) {
             d.removeObject(forKey: k)
         }
     }

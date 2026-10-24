@@ -18,6 +18,8 @@ struct Derived {
     var heroSeries: [Item] = []
     /// Contenu par clé, et par la clé de chacune de ses versions (une reprise survit ainsi au regroupement).
     var byKey: [String: Item] = [:]
+    /// Index de recherche : contenu visible et son titre sans accents ni majuscules.
+    var index: [(Item, String)] = []
 
     /// « En vedette » : les mieux notés (avec affiche), mélangés ; sinon des titres au hasard.
     static func featured(_ pool: [Item]) -> [Item] {
@@ -38,11 +40,15 @@ struct Derived {
         return (order + extra).compactMap { c in d[c].flatMap { $0.isEmpty ? nil : (c, $0) } }
     }
 
-    static func make(_ c: Catalog) -> Derived {
+    static func make(_ c: Catalog, hidden: Set<String> = []) -> Derived {
         var r = Derived()
-        let featV = featured(c.vod), featS = featured(c.series)
-        let vodCats = byCategory(c.vod, order: c.vodCats)
-        let serCats = byCategory(c.series, order: c.serCats)
+        // catégories masquées : absentes des rangées, de « À la une » et de la recherche
+        // (favoris, listes et « Reprendre » ne changent pas)
+        let vodVis = hidden.isEmpty ? c.vod : c.vod.filter { !hidden.contains("vod|" + $0.cat) }
+        let serVis = hidden.isEmpty ? c.series : c.series.filter { !hidden.contains("series|" + $0.cat) }
+        let featV = featured(vodVis), featS = featured(serVis)
+        let vodCats = byCategory(vodVis, order: c.vodCats)
+        let serCats = byCategory(serVis, order: c.serCats)
         func dedup(_ l: [Item]) -> [Item] { var s = Set<String>(); return l.filter { s.insert($0.key).inserted } }
 
         r.vod = (featV.isEmpty ? [] : [Row(id: "vod|*vedette", title: "En vedette", items: dedup(featV))])
@@ -67,6 +73,8 @@ struct Derived {
             for v in i.variants where bk["\(i.type):\(v.id)"] == nil { bk["\(i.type):\(v.id)"] = i }
         }
         r.byKey = bk
+        var seenIdx = Set<String>()
+        r.index = (vodVis + serVis).filter { seenIdx.insert($0.key).inserted }.map { ($0, Names.searchKey($0.name)) }
         return r
     }
 }
@@ -86,6 +94,16 @@ final class AppModel: ObservableObject {
     /// Change quand une lecture se termine (rangées « Reprendre », barres de progression).
     @Published private(set) var progressTick = 0
 
+    /// Change quand l'apparence change (couleur d'accent) : l'interface est redessinée.
+    @Published private(set) var appearance = 0
+    /// Distribution et réalisation des films (fiches ouvertes ou indexation) : identifiant -> noms.
+    private(set) var people: [Int: String] = [:]
+    @Published private(set) var indexing = false
+    @Published private(set) var indexDone = 0
+    private var indexTask: Task<Void, Never>?
+    /// Contenu pour lequel créer une nouvelle liste (menu de l'appui long).
+    @Published var newListFor: Item?
+
     // chaînes (Direct)
     @Published private(set) var live: [Item] = []
     @Published private(set) var liveRows: [Row] = []
@@ -98,6 +116,7 @@ final class AppModel: ObservableObject {
         status = Files.load(AccountStatus.self, from: Files.status)
         phase = .ready
         configureDownloads()
+        people = Files.load([Int: String].self, from: Files.people) ?? [:]
         Task {
             // démarrage rapide : le catalogue enregistré s'affiche tout de suite, la mise à jour se fait ensuite
             let c = await Task.detached(priority: .userInitiated) { Files.load(Catalog.self, from: Files.catalog) }.value
@@ -107,7 +126,8 @@ final class AppModel: ObservableObject {
     }
 
     private func apply(_ c: Catalog) async {
-        let d = await Task.detached(priority: .userInitiated) { Derived.make(c) }.value
+        let hidden = Store.hiddenCats
+        let d = await Task.detached(priority: .userInitiated) { Derived.make(c, hidden: hidden) }.value
         catalog = c
         derived = d
     }
@@ -213,7 +233,140 @@ final class AppModel: ObservableObject {
         guard let a = account else { throw XtreamError.badCredentials }
         let i = try await XtreamClient(a).info(type: item.type, id: item.id)
         infoCache[item.key] = i
+        if item.type == "vod", people[item.id] == nil {
+            people[item.id] = [i.cast, i.director].filter { !$0.isEmpty }.joined(separator: ", ")
+            if people.count % 20 == 0 { savePeople() }
+        }
         return i
+    }
+
+    // ---------- distribution des films (recherche par acteur) ----------
+    func peopleOf(_ i: Item) -> String { i.people.isEmpty ? (people[i.id] ?? "") : i.people }
+
+    private func savePeople() {
+        let snap = people
+        Task.detached(priority: .utility) { Files.save(snap, to: Files.people) }
+    }
+
+    var filmCount: Int { catalog?.vod.count ?? 0 }
+    var indexedCount: Int { people.count }
+
+    /// Indexe la distribution de tous les films (une fiche à la fois, sans gêner la lecture).
+    func toggleIndexing() {
+        if indexing { indexTask?.cancel(); indexing = false; savePeople(); return }
+        guard let a = account, let films = catalog?.vod else { return }
+        indexing = true
+        indexTask = Task {
+            let client = XtreamClient(a)
+            var n = 0
+            for f in films where people[f.id] == nil {
+                if Task.isCancelled { break }
+                if let i = try? await client.info(type: "vod", id: f.id) {
+                    people[f.id] = [i.cast, i.director].filter { !$0.isEmpty }.joined(separator: ", ")
+                } else {
+                    people[f.id] = ""
+                }
+                n += 1
+                if n % 25 == 0 { indexDone = people.count }
+                if n % 200 == 0 { savePeople() }
+                try? await Task.sleep(nanoseconds: 120_000_000)
+            }
+            savePeople()
+            indexDone = people.count
+            indexing = false
+        }
+    }
+
+    // ---------- recherche ----------
+    /// Films et séries par titre, puis par acteur ou réalisateur ; sans tenir compte des accents ; calculée à part.
+    func search(_ text: String) async -> [Row] {
+        let q = Names.searchKey(text).trimmed
+        guard q.count >= 2 else { return [] }
+        let index = derived.index
+        let ppl = people
+        return await Task.detached(priority: .userInitiated) { () -> [Row] in
+            let byTitle = index.filter { $0.1.contains(q) }
+                .sorted { ($0.1.hasPrefix(q) ? 0 : 1) < ($1.1.hasPrefix(q) ? 0 : 1) }
+                .map(\.0)
+            let keys = Set(byTitle.map(\.key))
+            let byPerson = index.filter { e in
+                guard !keys.contains(e.0.key) else { return false }
+                let p = e.0.people.isEmpty ? (ppl[e.0.id] ?? "") : e.0.people
+                return !p.isEmpty && Names.searchKey(p).contains(q)
+            }.map(\.0)
+            var rows: [Row] = []
+            let films = byTitle.filter { $0.type == "vod" }, series = byTitle.filter { $0.type == "series" }
+            if !films.isEmpty { rows.append(Row(id: "search|vod", title: "Films", items: films)) }
+            if !series.isEmpty { rows.append(Row(id: "search|series", title: "Séries", items: series)) }
+            if !byPerson.isEmpty { rows.append(Row(id: "search|people", title: "Avec « \(text.trimmed) »", items: byPerson)) }
+            return rows
+        }.value
+    }
+
+    /// Autres titres d'une personne (nom exact dans la distribution ou la réalisation).
+    func titles(with person: String) -> [Item] {
+        let nm = person.trimmed.lowercased()
+        return derived.index.map(\.0).filter { i in
+            peopleOf(i).split(whereSeparator: { ",/;".contains($0) }).contains { $0.trimmingCharacters(in: .whitespaces).lowercased() == nm }
+        }
+    }
+
+    // ---------- listes, notes, « Reprendre » ----------
+    /// Rangées de « Mes listes » : favoris, puis chaque liste.
+    func listRows() -> [Row] {
+        _ = progressTick
+        var rows: [Row] = []
+        if let f = favoritesRow(nil) { rows.append(f) }
+        let m = Store.lists
+        for name in Store.listNames {
+            let items = (m[name] ?? []).compactMap { derived.byKey[$0] }
+            rows.append(Row(id: "list|" + name, title: name, items: items))
+        }
+        return rows
+    }
+
+    func toggleInList(_ name: String, _ item: Item) { Store.toggleInList(name, item.key); progressChanged() }
+    func toggleFav(_ item: Item) { Store.toggleFav(item.key); progressChanged() }
+    func createList(_ name: String, with item: Item?) {
+        let n = name.trimmed
+        guard !n.isEmpty else { return }
+        Store.createList(n)
+        if let i = item { Store.toggleInList(n, i.key) }
+        progressChanged()
+    }
+    func deleteList(_ name: String) { Store.deleteList(name); progressChanged() }
+
+    /// Retire un titre de la rangée « Reprendre » (il reste dans le catalogue).
+    func removeFromResume(_ item: Item) {
+        for k in Store.recent where k == item.key || derived.byKey[k]?.key == item.key { Store.removeRecent(k) }
+        progressChanged()
+    }
+
+    func setRating(_ item: Item, _ v: Int) {
+        Store.setRating(item.key, Store.rating(item.key) == v ? 0 : v)
+        progressChanged()
+    }
+
+    // ---------- catégories masquées, apparence ----------
+    func setHidden(_ all: Set<String>) {
+        Store.hiddenCats = all
+        hiddenTask?.cancel()
+        // plusieurs changements de suite : on recalcule une seule fois
+        hiddenTask = Task {
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            if Task.isCancelled { return }
+            if let c = catalog { await apply(c) }
+            await applyLive(live, liveCatsOrder)
+        }
+    }
+    private var hiddenTask: Task<Void, Never>?
+
+    func setAccent(_ i: Int) { Store.accent = i; appearance += 1 }
+    func setCustomAccent(hue: Double, sat: Double) {
+        Store.customHue = hue
+        Store.customSat = sat
+        Store.accent = Accent.customIndex
+        appearance += 1
     }
 
     // ---------- épisodes ----------
@@ -325,9 +478,14 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private(set) var liveCatsOrder: [String] = []
+
     private func applyLive(_ items: [Item], _ cats: [String]) async {
+        liveCatsOrder = cats
+        let hidden = Store.hiddenCats
         let rows = await Task.detached { () -> [Row] in
-            Derived.byCategory(items, order: cats).map { Row(id: "live|" + $0.0, title: $0.0, items: $0.1) }
+            Derived.byCategory(items.filter { !hidden.contains("live|" + $0.cat) }, order: cats)
+                .map { Row(id: "live|" + $0.0, title: $0.0, items: $0.1) }
         }.value
         live = items
         liveRows = rows

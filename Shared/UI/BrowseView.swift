@@ -12,6 +12,7 @@ struct BrowseView: View {
     let rows: [Row]
     let hero: [Item]
     @State private var selected: Selection?
+    @State private var searching = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -40,6 +41,21 @@ struct BrowseView: View {
             }
         }
         .background(Theme.bg.ignoresSafeArea())
+        #if os(iOS)
+        // iPhone : la loupe en haut à droite, comme sur Android
+        .overlay(alignment: .topTrailing) {
+            Button { searching = true } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 40, height: 40)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .foregroundStyle(.white)
+            }
+            .padding(.trailing, 12)
+            .padding(.top, 4)
+        }
+        .sheet(isPresented: $searching) { SearchView(closable: true) }
+        #endif
         #if os(tvOS)
         // sur la TV, une feuille s'affiche en petit panneau central : la fiche prend tout l'écran
         .fullScreenCover(item: $selected) { s in
@@ -211,7 +227,7 @@ struct RowView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: Theme.cardGap) {
                     ForEach(row.items, id: \.key) { item in
-                        PosterCard(item: item) { open(item) }
+                        PosterCard(item: item, resume: row.id.hasPrefix("resume|")) { open(item) }
                     }
                 }
                 .padding(.horizontal, Theme.edge)
@@ -224,6 +240,7 @@ struct RowView: View {
 
 struct PosterCard: View {
     let item: Item
+    var resume = false
     let action: () -> Void
 
     private var w: CGFloat { Theme.posterWidth }
@@ -259,11 +276,40 @@ struct PosterCard: View {
             #else
             .buttonStyle(.plain)
             #endif
+            // appui long : favoris, listes ; dans « Reprendre » : retirer
+            .contextMenu { ItemMenu(item: item, resume: resume) }
             Text(item.name)
                 .font(Theme.tv ? .caption : .caption2)
                 .foregroundStyle(Theme.dim)
                 .lineLimit(1)
                 .frame(width: w, alignment: .leading)
+        }
+    }
+}
+
+
+/// Menu de l'appui long sur une affiche : favoris, listes personnelles, nouvelle liste ; « Retirer de Reprendre ».
+struct ItemMenu: View {
+    @EnvironmentObject var model: AppModel
+    let item: Item
+    var resume = false
+
+    var body: some View {
+        let fav = Store.isFav(item.key)
+        Button { model.toggleFav(item) } label: {
+            Label(fav ? "Retirer des favoris" : "Ajouter aux favoris", systemImage: fav ? "heart.slash" : "heart")
+        }
+        ForEach(Store.listNames, id: \.self) { name in
+            let inside = Store.inList(name, item.key)
+            Button { model.toggleInList(name, item) } label: {
+                Label(inside ? "Retirer de « \(name) »" : "Ajouter à « \(name) »", systemImage: inside ? "minus.circle" : "text.badge.plus")
+            }
+        }
+        Button { model.newListFor = item } label: { Label("Nouvelle liste…", systemImage: "plus") }
+        if resume {
+            Button(role: .destructive) { model.removeFromResume(item) } label: {
+                Label("Retirer de « Reprendre »", systemImage: "xmark")
+            }
         }
     }
 }

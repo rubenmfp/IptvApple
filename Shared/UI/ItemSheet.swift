@@ -19,7 +19,12 @@ struct ItemSheet: View {
     init(item: Item) { _item = State(initialValue: item) }
 
     private var isSeries: Bool { item.type == "series" }
-    private var chosen: Variant? { variant ?? item.variants.first }
+    /// Version choisie, sinon la qualité préférée (la dernière choisie ailleurs), sinon la meilleure.
+    private var chosen: Variant? {
+        variant ?? item.variants.first { $0.q == Store.prefQuality } ?? item.variants.first
+    }
+    @State private var person: String?
+    @State private var rating = 0
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -48,12 +53,18 @@ struct ItemSheet: View {
         .fullScreenCover(item: $play) { r in
             PlayerView(req: r) { model.progressChanged() }
         }
+        #if os(tvOS)
+        .fullScreenCover(item: Binding(get: { person.map { PersonRef(name: $0) } }, set: { person = $0?.name })) { p in PersonView(name: p.name) }
+        #else
+        .sheet(item: Binding(get: { person.map { PersonRef(name: $0) } }, set: { person = $0?.name })) { p in PersonView(name: p.name) }
+        #endif
     }
 
     // MARK: - Chargement
 
     private func load() async {
         fav = Store.isFav(item.key)
+        rating = Store.rating(item.key)
         similar = model.sameCategory(as: item)
         variant = nil
         expanded = false
@@ -171,6 +182,9 @@ struct ItemSheet: View {
                                               subtitle: v.q == "?" ? "" : v.q, poster: item.poster), big: true)
             }
             #endif
+            #if os(tvOS)
+            ratingButtons
+            #endif
             Button {
                 Store.toggleFav(item.key)
                 fav = Store.isFav(item.key)
@@ -240,6 +254,19 @@ struct ItemSheet: View {
                     DownloadTile(entry: DLEntry(key: "vod:\(v.id)", kind: "vod", id: v.id, ext: v.ext, title: item.name,
                                                 subtitle: v.q == "?" ? "" : v.q, poster: item.poster))
                 }
+                Menu {
+                    Button { model.setRating(item, 2); rating = Store.rating(item.key) } label: { Label("J'adore", systemImage: "heart.circle") }
+                    Button { model.setRating(item, 1); rating = Store.rating(item.key) } label: { Label("J'aime", systemImage: "hand.thumbsup") }
+                    Button { model.setRating(item, -1); rating = Store.rating(item.key) } label: { Label("Je n'aime pas", systemImage: "hand.thumbsdown") }
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: rating == 2 ? "heart.circle.fill" : rating == 1 ? "hand.thumbsup.fill" : rating == -1 ? "hand.thumbsdown.fill" : "hand.thumbsup")
+                            .font(.system(size: 22)).foregroundStyle(rating != 0 ? Theme.accent : .white)
+                        Text(rating == 2 ? "J'adore" : rating == 1 ? "J'aime" : rating == -1 ? "Je n'aime pas" : "Noter")
+                            .font(.caption2).foregroundStyle(Theme.dim).lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                }
                 ActionTile(icon: fav ? "heart.fill" : "heart", text: fav ? "Dans mes favoris" : "Favoris", on: fav) {
                     Store.toggleFav(item.key)
                     fav = Store.isFav(item.key)
@@ -271,7 +298,7 @@ struct ItemSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Theme.tv ? 20 : 8) {
                     ForEach(item.variants, id: \.id) { v in
-                        Button { variant = v } label: {
+                        Button { variant = v; if v.q != "?" { Store.prefQuality = v.q } } label: {
                             HStack(spacing: 6) {
                                 if v.id == chosen?.id { Image(systemName: "checkmark") }
                                 Text(v.q == "?" ? "Standard" : v.q)
@@ -358,15 +385,56 @@ struct ItemSheet: View {
 
     // MARK: - Distribution et même catégorie
 
+    /// Distribution et réalisation : chaque nom ouvre les autres titres de la personne.
     @ViewBuilder private var people: some View {
         if let i = info, !(i.cast.isEmpty && i.director.isEmpty) {
-            VStack(alignment: .leading, spacing: 6) {
-                if !i.cast.isEmpty { (Text("Distribution : ").bold() + Text(i.cast)).lineLimit(3) }
-                if !i.director.isEmpty { (Text(isSeries ? "Création : " : "Réalisation : ").bold() + Text(i.director)).lineLimit(2) }
+            VStack(alignment: .leading, spacing: Theme.tv ? 14 : 10) {
+                personRow("Distribution", i.cast)
+                personRow(isSeries ? "Création" : "Réalisation", i.director)
             }
-            .font(Theme.tv ? .callout : .footnote)
-            .foregroundStyle(Theme.dim)
-            .padding(.horizontal, Theme.tv ? 80 : Theme.edge)
+        }
+    }
+
+    @ViewBuilder private func personRow(_ title: String, _ names: String) -> some View {
+        let list = names.split(whereSeparator: { ",/;".contains($0) }).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if !list.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(Theme.tv ? .headline : .subheadline.bold()).foregroundStyle(Theme.light)
+                    .padding(.horizontal, Theme.tv ? 80 : Theme.edge)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Theme.tv ? 20 : 8) {
+                        ForEach(Array(list.prefix(15)), id: \.self) { n in
+                            Button { person = n } label: {
+                                Text(n).font(Theme.tv ? .callout : .footnote).lineLimit(1)
+                                    #if os(iOS)
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(Color.white.opacity(0.1), in: Capsule())
+                                    .foregroundStyle(Theme.light)
+                                    #endif
+                            }
+                            #if os(iOS)
+                            .buttonStyle(.plain)
+                            #endif
+                        }
+                    }
+                    .padding(.horizontal, Theme.tv ? 80 : Theme.edge)
+                    .padding(.vertical, Theme.tv ? 16 : 0)
+                }
+                .scrollClipDisabled()
+            }
+        }
+    }
+
+    /// Notes : je n'aime pas, j'aime, j'adore (elles orientent les recommandations).
+    private var ratingButtons: some View {
+        let opts: [(Int, String, String)] = [(-1, "hand.thumbsdown", "Je n'aime pas"), (1, "hand.thumbsup", "J'aime"), (2, "heart.circle", "J'adore")]
+        return ForEach(opts, id: \.0) { v, icon, label in
+            Button {
+                model.setRating(item, v)
+                rating = Store.rating(item.key)
+            } label: {
+                Label(label, systemImage: rating == v ? icon + ".fill" : icon).labelStyle(.iconOnly)
+            }
         }
     }
 
@@ -488,3 +556,5 @@ struct EpisodeCard: View {
         }
     }
 }
+
+struct PersonRef: Identifiable { let name: String; var id: String { name } }

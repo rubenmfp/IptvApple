@@ -113,6 +113,16 @@ struct PlusView: View {
         NavigationStack {
             List {
                 NavigationLink {
+                    SearchView()
+                } label: {
+                    Label("Recherche", systemImage: "magnifyingglass")
+                }
+                NavigationLink {
+                    ListsView()
+                } label: {
+                    Label("Mes listes", systemImage: "heart")
+                }
+                NavigationLink {
                     DownloadsView()
                 } label: {
                     HStack {
