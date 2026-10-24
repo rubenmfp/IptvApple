@@ -17,8 +17,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = "IptvApple"
 BUNDLE = "com.rubenmfp.iptvapple"
 DEPLOY = "17.0"
-VERSION = "0.2.2"
-BUILD = "4"
+VERSION = "0.3"
+BUILD = "5"
 DISPLAY_NAME = "IptvTV"
 
 SOURCE_EXT = {".swift": "sourcecode.swift"}
@@ -76,7 +76,7 @@ def settings_block(d, indent):
 
 def main():
     targets = {
-        "ios": dict(name=PROJECT, bundle=BUNDLE, sdk="iphoneos",
+        "ios": dict(name=PROJECT, bundle=BUNDLE, sdk="iphoneos", vlc="MobileVLCKit",
                     extra={"IPHONEOS_DEPLOYMENT_TARGET": DEPLOY, "TARGETED_DEVICE_FAMILY": "1,2",
                            "INFOPLIST_KEY_UILaunchScreen_Generation": "YES",
                            "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents": "YES",
@@ -84,7 +84,7 @@ def main():
                                "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight",
                            "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad":
                                "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"}),
-        "tv": dict(name=PROJECT + "TV", bundle=BUNDLE + ".tv", sdk="appletvos",
+        "tv": dict(name=PROJECT + "TV", bundle=BUNDLE + ".tv", sdk="appletvos", vlc="TVVLCKit",
                    extra={"TVOS_DEPLOYMENT_TARGET": DEPLOY, "TARGETED_DEVICE_FAMILY": "3"}),
     }
 
@@ -144,6 +144,7 @@ def main():
 
     product_refs = []
     native_targets = []
+    framework_refs = []
     for key, t in targets.items():
         name = t["name"]
         prod = uid("product", key)
@@ -161,8 +162,21 @@ def main():
             "buildActionMask = 2147483647;\n\t\t\tfiles = (\n" +
             "".join(f"\t\t\t\t{b} /* {n} in Resources */,\n" for b, n in target_resources[key]) +
             "\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;")
+        # moteur de lecture VLCKit (xcframework dynamique, récupéré par tools/fetch_vlckit.sh) : lié et embarqué
+        vlc = t["vlc"]
+        vref = uid("file", "Frameworks/" + vlc)
+        add(vref, "PBXFileReference",
+            f"lastKnownFileType = wrapper.xcframework; name = {vlc}.xcframework; path = Frameworks/{vlc}.xcframework; sourceTree = \"<group>\";")
+        framework_refs.append((vref, vlc + ".xcframework"))
+        vlink = uid("build", key, "link", vlc)
+        vembed = uid("build", key, "embed", vlc)
+        add(vlink, "PBXBuildFile", f"fileRef = {vref} /* {vlc}.xcframework */;")
+        add(vembed, "PBXBuildFile", f"fileRef = {vref} /* {vlc}.xcframework */; settings = {{ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }};")
         add(fw_phase, "PBXFrameworksBuildPhase",
-            "buildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;")
+            f"buildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t\t{vlink} /* {vlc}.xcframework in Frameworks */,\n\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;")
+        embed_phase = uid("phase", key, "embed")
+        add(embed_phase, "PBXCopyFilesBuildPhase",
+            f"buildActionMask = 2147483647;\n\t\t\tdstPath = \"\";\n\t\t\tdstSubfolderSpec = 10;\n\t\t\tfiles = (\n\t\t\t\t{vembed} /* {vlc}.xcframework in Embed Frameworks */,\n\t\t\t);\n\t\t\tname = \"Embed Frameworks\";\n\t\t\trunOnlyForDeploymentPostprocessing = 0;")
 
         common = {
             "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
@@ -201,7 +215,7 @@ def main():
         tid = uid("target", key)
         add(tid, "PBXNativeTarget",
             f"buildConfigurationList = {cl} /* Build configuration list for PBXNativeTarget \"{name}\" */;\n"
-            f"\t\t\tbuildPhases = (\n\t\t\t\t{src_phase} /* Sources */,\n\t\t\t\t{fw_phase} /* Frameworks */,\n\t\t\t\t{res_phase} /* Resources */,\n\t\t\t);\n"
+            f"\t\t\tbuildPhases = (\n\t\t\t\t{src_phase} /* Sources */,\n\t\t\t\t{fw_phase} /* Frameworks */,\n\t\t\t\t{res_phase} /* Resources */,\n\t\t\t\t{embed_phase} /* Embed Frameworks */,\n\t\t\t);\n"
             f"\t\t\tbuildRules = (\n\t\t\t);\n\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = {q(name)};\n"
             f"\t\t\tproductName = {q(name)};\n\t\t\tproductReference = {prod} /* {name}.app */;\n"
             f"\t\t\tproductType = \"com.apple.product-type.application\";")
@@ -210,9 +224,13 @@ def main():
     add(products_group, "PBXGroup",
         "children = (\n" + "".join(f"\t\t\t\t{p} /* {n} */,\n" for p, n in product_refs) +
         "\t\t\t);\n\t\t\tname = Products;\n\t\t\tsourceTree = \"<group>\";")
+    fw_group = uid("group", "Frameworks")
+    add(fw_group, "PBXGroup",
+        "children = (\n" + "".join(f"\t\t\t\t{r} /* {n} */,\n" for r, n in framework_refs) +
+        "\t\t\t);\n\t\t\tname = Frameworks;\n\t\t\tsourceTree = \"<group>\";")
     add(main_group, "PBXGroup",
         "children = (\n" + "".join(f"\t\t\t\t{g} /* {n} */,\n" for g, n in group_ids) +
-        f"\t\t\t\t{config_group} /* Config */,\n\t\t\t\t{products_group} /* Products */,\n"
+        f"\t\t\t\t{config_group} /* Config */,\n\t\t\t\t{fw_group} /* Frameworks */,\n\t\t\t\t{products_group} /* Products */,\n"
         "\t\t\t);\n\t\t\tsourceTree = \"<group>\";")
 
     # project-level configs

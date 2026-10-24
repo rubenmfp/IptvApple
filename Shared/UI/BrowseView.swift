@@ -242,6 +242,17 @@ struct PosterCard: View {
                     .overlay(alignment: .topTrailing) {
                         if let b = badge { QualityBadge(text: b).padding(6) }
                     }
+                    .overlay(alignment: .bottom) {
+                        if let p = AppModel.progress(of: item), p.dur > 0 {
+                            GeometryReader { g in
+                                ZStack(alignment: .leading) {
+                                    Rectangle().fill(.white.opacity(0.35))
+                                    Rectangle().fill(Theme.accent).frame(width: g.size.width * min(1, Double(p.pos) / Double(p.dur)))
+                                }
+                            }
+                            .frame(height: Theme.tv ? 6 : 4)
+                        }
+                    }
             }
             #if os(tvOS)
             .buttonStyle(.card)

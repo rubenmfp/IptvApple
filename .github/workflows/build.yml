@@ -32,6 +32,15 @@ jobs:
           xcodebuild -version
           echo "::notice title=Xcode::$(xcodebuild -version | tr '\n' ' ') | $(xcodebuild -showsdks | grep -oE '(iphoneos|appletvos)[0-9.]+' | tr '\n' ' ')"
 
+      - name: VLCKit (cache)
+        uses: actions/cache@v4
+        with:
+          path: Frameworks
+          key: vlckit-${{ hashFiles('tools/fetch_vlckit.sh') }}
+
+      - name: VLCKit
+        run: tools/fetch_vlckit.sh
+
       - name: Tests du code commun
         run: |
           xcrun swiftc -O Shared/Core/Models.swift Shared/Core/Regex.swift Shared/Core/Names.swift Shared/Core/JSONScan.swift \

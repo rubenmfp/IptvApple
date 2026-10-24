@@ -21,16 +21,16 @@ struct MainTabs: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            BrowseView(rows: model.derived.home, hero: model.derived.heroHome)
+            BrowseView(rows: [model.resumeRow(nil)].compactMap { $0 } + model.derived.home, hero: model.derived.heroHome)
                 .tabItem { Label("Accueil", systemImage: "house") }
                 .tag(1)
-            BrowseView(rows: model.derived.vod, hero: model.derived.heroVod)
+            BrowseView(rows: [model.resumeRow("vod")].compactMap { $0 } + model.derived.vod, hero: model.derived.heroVod)
                 .tabItem { Label("Films", systemImage: "film") }
                 .tag(2)
-            BrowseView(rows: model.derived.series, hero: model.derived.heroSeries)
+            BrowseView(rows: [model.resumeRow("series")].compactMap { $0 } + model.derived.series, hero: model.derived.heroSeries)
                 .tabItem { Label("Séries", systemImage: "tv") }
                 .tag(3)
-            ComingSoon(title: "Direct", step: "à l'étape 6")
+            LiveView()
                 .tabItem { Label("Direct", systemImage: "dot.radiowaves.left.and.right") }
                 .tag(4)
             SettingsView()

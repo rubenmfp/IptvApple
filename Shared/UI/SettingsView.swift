@@ -42,7 +42,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Étape 2 : connexion et catalogue. La lecture arrive à l'étape 3.").foregroundStyle(Theme.dim)
+                    Text("Étape 3 : lecture (moteur VLC). Fiche complète et épisodes à l'étape 4.").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")

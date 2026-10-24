@@ -16,6 +16,8 @@ struct Derived {
     var heroHome: [Item] = []
     var heroVod: [Item] = []
     var heroSeries: [Item] = []
+    /// Contenu par clé, et par la clé de chacune de ses versions (une reprise survit ainsi au regroupement).
+    var byKey: [String: Item] = [:]
 
     /// « En vedette » : les mieux notés (avec affiche), mélangés ; sinon des titres au hasard.
     static func featured(_ pool: [Item]) -> [Item] {
@@ -58,6 +60,13 @@ struct Derived {
         r.heroHome = Array((featV.prefix(6) + featS.prefix(6)).filter { $0.poster != nil }.shuffled().prefix(8))
         r.heroVod = Array(featV.filter { $0.poster != nil }.prefix(8))
         r.heroSeries = Array(featS.filter { $0.poster != nil }.prefix(8))
+        var bk: [String: Item] = [:]
+        bk.reserveCapacity((c.vod.count + c.series.count) * 2)
+        for i in c.vod + c.series {
+            bk[i.key] = i
+            for v in i.variants where bk["\(i.type):\(v.id)"] == nil { bk["\(i.type):\(v.id)"] = i }
+        }
+        r.byKey = bk
         return r
     }
 }
@@ -74,6 +83,14 @@ final class AppModel: ObservableObject {
     @Published private(set) var loading = false
     @Published private(set) var progress = ""
     @Published var error: String?
+    /// Change quand une lecture se termine (rangées « Reprendre », barres de progression).
+    @Published private(set) var progressTick = 0
+
+    // chaînes (Direct)
+    @Published private(set) var live: [Item] = []
+    @Published private(set) var liveRows: [Row] = []
+    @Published private(set) var liveLoading = false
+    @Published var liveError: String?
 
     init() {
         guard let a = Keychain.load() else { phase = .login; return }
@@ -145,8 +162,114 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // ---------- reprise ----------
+    func progressChanged() { progressTick += 1 }
+
+    /// Position enregistrée d'un contenu (sur l'une de ses versions) : (clé, position, durée).
+    static func progress(of item: Item) -> (key: String, pos: Int, dur: Int)? {
+        for v in item.variants {
+            let k = "\(item.type):\(v.id)"
+            let p = Store.pos(k)
+            if p > 0 { return (k, p, Store.dur(k)) }
+        }
+        return nil
+    }
+
+    /// Rangée « Reprendre » : lectures récentes pas terminées, du type demandé (nil = tous).
+    func resumeRow(_ type: String?) -> Row? {
+        _ = progressTick
+        var seen = Set<String>()
+        let items = Store.recent.compactMap { derived.byKey[$0] }
+            .filter { (type == nil || $0.type == type) && seen.insert($0.key).inserted }
+            .filter { $0.type != "vod" || Self.progress(of: $0) != nil }
+        guard !items.isEmpty else { return nil }
+        return Row(id: "resume|\(type ?? "*")", title: "Reprendre", items: items)
+    }
+
+    // ---------- adresses de lecture ----------
+    private static func safe(_ s: String) -> String {
+        if s.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil { return s }
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
+    }
+
+    /// Serveur indiqué par le fournisseur (server_info) puis serveur saisi : ils peuvent différer.
+    private var bases: [String] {
+        var out: [String] = []
+        for b in [status?.streamBase, account?.host].compactMap({ $0 }) {
+            var x = b
+            while x.hasSuffix("/") { x.removeLast() }
+            if !out.contains(x) { out.append(x) }
+        }
+        return out
+    }
+
+    /// Film ou épisode : l'extension annoncée est souvent fausse ; on essaie celle qui a marché, l'annoncée, puis mkv, mp4, avi.
+    func fileURLs(kind: String, id: Int, ext: String) -> [URL] {
+        guard let a = account else { return [] }
+        var exts: [String] = []
+        for e in [Store.goodExt(kind), ext.lowercased(), "mkv", "mp4", "avi"] where !e.isEmpty && !exts.contains(e) { exts.append(e) }
+        let path = kind == "vod" ? "movie" : "series"
+        return bases.flatMap { b in exts.compactMap { URL(string: "\(b)/\(path)/\(Self.safe(a.user))/\(Self.safe(a.pass))/\(id).\($0)") } }
+    }
+
+    func liveURLs(id: Int) -> [URL] {
+        guard let a = account else { return [] }
+        let u = Self.safe(a.user), p = Self.safe(a.pass)
+        return bases.flatMap { b in
+            ["\(b)/live/\(u)/\(p)/\(id).ts", "\(b)/live/\(u)/\(p)/\(id).m3u8", "\(b)/\(u)/\(p)/\(id)"].compactMap(URL.init(string:))
+        }
+    }
+
+    // ---------- chaînes ----------
+    private struct LiveCache: Codable { var items: [Item]; var cats: [String]; var date: Date }
+
+    func loadLive(force: Bool = false) {
+        guard let a = account, !liveLoading else { return }
+        if !force, !live.isEmpty { return }
+        liveLoading = true
+        liveError = nil
+        Task {
+            let url = Files.dir.appendingPathComponent("live.json")
+            var cache = await Task.detached { Files.load(LiveCache.self, from: url) }.value
+            if let c = cache { await applyLive(c.items, c.cats) }
+            let stale = cache.map { Date().timeIntervalSince($0.date) > Double(Prefs.refreshDays) * 86_400 } ?? true
+            if force || stale {
+                do {
+                    let r = try await XtreamClient(a).items("live")
+                    cache = LiveCache(items: r.items, cats: r.cats, date: Date())
+                    let c = cache!
+                    await Task.detached { Files.save(c, to: url) }.value
+                    await applyLive(r.items, r.cats)
+                } catch {
+                    liveError = Self.message(error)
+                }
+            }
+            liveLoading = false
+        }
+    }
+
+    private func applyLive(_ items: [Item], _ cats: [String]) async {
+        let rows = await Task.detached { () -> [Row] in
+            Derived.byCategory(items, order: cats).map { Row(id: "live|" + $0.0, title: $0.0, items: $0.1) }
+        }.value
+        live = items
+        liveRows = rows
+    }
+
+    func recentLiveRow() -> Row? {
+        _ = progressTick
+        let byKey = Dictionary(live.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        let items = Store.recentLive.compactMap { byKey[$0] }
+        return items.isEmpty ? nil : Row(id: "live|*recent", title: "Regardées récemment", items: items)
+    }
+
     func logout() {
         Keychain.delete()
+        Store.reset()
+        live = []
+        liveRows = []
         Files.removeAll()
         account = nil
         status = nil
