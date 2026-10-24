@@ -37,7 +37,7 @@ jobs:
             Shared/Core/Xtream.swift Tests/main.swift -o tests > tests.log 2>&1 || echo "compilation des tests impossible" >> tests.log
           if [ -x ./tests ]; then ./tests >> tests.log 2>&1 || true; fi
           cat tests.log
-          grep -E "error:|ÉCHEC|impossible" tests.log | head -30 | sed 's/^/::error title=Tests::/' || true
+          if ! grep -q "Tous les tests passent" tests.log; then tail -40 tests.log | sed 's/^/::error title=Tests::/'; fi
           grep -E "titres :" tests.log | sed 's/^/::notice title=Tests::/' || true
           grep -q "Tous les tests passent" tests.log
 
