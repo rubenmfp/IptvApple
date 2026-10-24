@@ -52,6 +52,11 @@ struct SettingsView: View {
                     } else {
                         Button("Actualiser maintenant") { model.refresh() }
                     }
+                    if model.liveLoading {
+                        HStack { ProgressView(); Text("Chargement des chaînes…") }
+                    } else {
+                        Button("Recharger les chaînes du Direct") { model.loadLive(force: true) }
+                    }
                     if let e = model.error { Text(e).foregroundStyle(Theme.accent) }
                     Picker("Actualisation automatique", selection: $refreshDays) {
                         ForEach(1...5, id: \.self) { d in Text(d == 1 ? "Chaque jour" : "Tous les \(d) jours").tag(d) }
