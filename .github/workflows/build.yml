@@ -10,6 +10,9 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-14
@@ -31,7 +34,7 @@ jobs:
       - name: Compiler pour iPhone
         run: |
           set -o pipefail
-          xcodebuild -project IptvApple.xcodeproj -target IptvApple -configuration Debug \
+          xcodebuild -project IptvApple.xcodeproj -target IptvApple -configuration Release \
             -sdk iphoneos CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ios.log | grep -E "error:|warning:|BUILD" || true
           grep -E "error:" ios.log | sort -u | head -30 | sed 's/^/::error title=iPhone::/' || true
           grep -E "warning:" ios.log | grep -v "appintents" | sort -u | head -20 | sed 's/^/::warning title=iPhone::/' || true
@@ -40,8 +43,31 @@ jobs:
       - name: Compiler pour Apple TV
         run: |
           set -o pipefail
-          xcodebuild -project IptvApple.xcodeproj -target IptvAppleTV -configuration Debug \
+          xcodebuild -project IptvApple.xcodeproj -target IptvAppleTV -configuration Release \
             -sdk appletvos CODE_SIGNING_ALLOWED=NO build 2>&1 | tee tv.log | grep -E "error:|warning:|BUILD" || true
           grep -E "error:" tv.log | sort -u | head -30 | sed 's/^/::error title=AppleTV::/' || true
           grep -E "warning:" tv.log | grep -v "appintents" | sort -u | head -20 | sed 's/^/::warning title=AppleTV::/' || true
           grep -q "BUILD SUCCEEDED" tv.log
+
+      - name: Fichiers d'installation (.ipa, non signés : Sideloadly les signe)
+        run: |
+          set -e
+          v=$(grep -m1 -oE 'MARKETING_VERSION = [0-9.]+' IptvApple.xcodeproj/project.pbxproj | grep -oE '[0-9.]+$')
+          mkdir -p out
+          for pair in "Release-iphoneos/IptvApple.app:IptvTV-iPhone" "Release-appletvos/IptvAppleTV.app:IptvTV-AppleTV"; do
+            app=build/${pair%%:*}; name=${pair##*:}
+            rm -rf Payload && mkdir Payload && cp -R "$app" Payload/
+            zip -qry "out/$name-$v.ipa" Payload
+          done
+          ls -l out
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Publier dans « Releases »
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete derniere -y --cleanup-tag || true
+          gh release create derniere out/*.ipa --prerelease --target "$GITHUB_SHA" \
+            --title "Dernière version ($VERSION, $(date -u +%d/%m %Hh%M) UTC)" \
+            --notes "Fichiers à glisser dans Sideloadly : IptvTV-iPhone pour l'iPhone, IptvTV-AppleTV pour l'Apple TV."
