@@ -70,7 +70,7 @@ let json = #"""
  {"num":2,"name":"Emoji 🎬","stream_id":102,"stream_icon":"","rating":null,"category_id":"9","container_extension":null,"year":"2020-05-01"},
  "intrus", 42]
 """#
-let items = try Xtream.parseStreams(Data(json.utf8), type: "vod", cats: ["3": "Action"])
+let items = try XtreamClient.parseStreams(Data(json.utf8), type: "vod", cats: ["3": "Action"])
 check(items.count, 2, "deux contenus lus")
 check(items[0].name, "Léon", "échappement \\u00e9")
 check(items[0].id, 101, "identifiant en texte")
@@ -85,12 +85,12 @@ check(items[1].ext, "mp4", "extension par défaut")
 check(items[1].year, 2020, "année depuis year")
 check(items[1].poster, nil, "affiche vide")
 let keyed = #"{"1":{"series_id":7,"name":"Série A","cover":"c.jpg","category_id":"1","cast":"X","director":"Y"},"2":{"series_id":8,"name":"Série B"}}"#
-let ser = try Xtream.parseStreams(Data(keyed.utf8), type: "series", cats: [:])
+let ser = try XtreamClient.parseStreams(Data(keyed.utf8), type: "series", cats: [:])
 check(ser.map(\.id), [7, 8], "liste en objet indexé")
 check(ser[0].people, "X, Y", "distribution")
 check(ser[0].poster, "c.jpg", "cover")
 var threw = false
-do { _ = try Xtream.parseStreams(Data(#"{"user_info":{"auth":0}}"#.utf8), type: "vod", cats: [:]) } catch { threw = true }
+do { _ = try XtreamClient.parseStreams(Data(#"{"user_info":{"auth":0}}"#.utf8), type: "vod", cats: [:]) } catch { threw = true }
 check(threw, true, "objet sans contenu = erreur")
 
 // ---------- lien M3U ----------
@@ -111,7 +111,7 @@ var big = "["
 for n in 0..<40_000 { big += (n > 0 ? "," : "") + #"{"name":"|FHD| Titre \#(n % 20000) (20\#(10 + n % 10)) MULTI","stream_id":\#(n + 1),"stream_icon":"http://x/\#(n).jpg","category_id":"\#(n % 30)","rating":"7.1"}"# }
 big += "]"
 let t0 = Date()
-let parsed = try Xtream.parseStreams(Data(big.utf8), type: "vod", cats: [:])
+let parsed = try XtreamClient.parseStreams(Data(big.utf8), type: "vod", cats: [:])
 let t1 = Date()
 let m = Names.mergeItems(parsed)
 let t2 = Date()
