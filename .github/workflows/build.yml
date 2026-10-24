@@ -34,8 +34,8 @@ jobs:
       - name: Tests du code commun
         run: |
           xcrun swiftc -O Shared/Core/Models.swift Shared/Core/Regex.swift Shared/Core/Names.swift Shared/Core/JSONScan.swift \
-            Shared/Core/Xtream.swift Tests/main.swift -o tests > tests.log 2>&1 || echo "compilation des tests impossible" >> tests.log
-          if [ -x ./tests ]; then ./tests >> tests.log 2>&1 || true; fi
+            Shared/Core/Xtream.swift Tests/main.swift -o "$RUNNER_TEMP/core-tests" > tests.log 2>&1 || echo "compilation des tests impossible" >> tests.log
+          if [ -x "$RUNNER_TEMP/core-tests" ]; then "$RUNNER_TEMP/core-tests" >> tests.log 2>&1 || true; fi
           cat tests.log
           if ! grep -q "Tous les tests passent" tests.log; then tail -40 tests.log | sed 's/^/::error title=Tests::/'; fi
           grep -E "titres :" tests.log | sed 's/^/::notice title=Tests::/' || true

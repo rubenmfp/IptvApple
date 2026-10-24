@@ -1,5 +1,5 @@
 // Tests du code commun (noms, regroupement, lecture JSON, lien M3U). Lancés par GitHub sur macOS :
-//   swiftc Shared/Core/{Models,Regex,Names,JSONScan,Xtream}.swift Tests/main.swift -o t && ./t
+//   swiftc Shared/Core/{Models,Regex,Names,JSONScan,Xtream}.swift Tests/main.swift -o /tmp/core-tests && /tmp/core-tests
 import Foundation
 
 var failures = 0
