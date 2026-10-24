@@ -70,6 +70,9 @@ jobs:
             zip -qry "out/$name-$v.ipa" Payload
           done
           ls -l out
+          for a in build/Release-iphoneos/IptvApple.app build/Release-appletvos/IptvAppleTV.app; do
+            echo "::notice title=Info.plist $(basename $a)::$(plutil -extract NSAppTransportSecurity json -o - $a/Info.plist 2>&1) · version $(plutil -extract CFBundleShortVersionString raw -o - $a/Info.plist)"
+          done
           echo "VERSION=$v" >> "$GITHUB_ENV"
 
       - name: Publier dans « Releases »
