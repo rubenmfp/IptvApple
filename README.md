@@ -3,7 +3,7 @@
 Version Apple (iPhone et Apple TV) de l'appli Android IptvTV : lecteur Xtream Codes sombre, pour un usage privé.
 
 ## État
-Étape 1 : appli « Bonjour » qui valide l'installation et la signature sur chaque appareil.
+Étape 2 : connexion (identifiants Xtream ou lien M3U) et catalogue films et séries en rangées par catégorie.
 
 ## Organisation
 - `Shared/` : code commun à l'iPhone et à l'Apple TV.

@@ -31,6 +31,16 @@ jobs:
           xcodebuild -version
           echo "::notice title=Xcode::$(xcodebuild -version | tr '\n' ' ') | $(xcodebuild -showsdks | grep -oE '(iphoneos|appletvos)[0-9.]+' | tr '\n' ' ')"
 
+      - name: Tests du code commun
+        run: |
+          set -o pipefail
+          xcrun swiftc -O Shared/Core/Models.swift Shared/Core/Regex.swift Shared/Core/Names.swift Shared/Core/JSONScan.swift \
+            Shared/Core/Xtream.swift Tests/main.swift -o tests 2>&1 | tee tests.log
+          ./tests 2>&1 | tee -a tests.log
+          grep -E "error:|ÉCHEC" tests.log | head -30 | sed 's/^/::error title=Tests::/' || true
+          grep -E "titres :" tests.log | sed 's/^/::notice title=Tests::/' || true
+          grep -q "Tous les tests passent" tests.log
+
       - name: Compiler pour iPhone
         run: |
           set -o pipefail

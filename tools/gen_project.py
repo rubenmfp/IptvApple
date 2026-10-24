@@ -17,8 +17,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = "IptvApple"
 BUNDLE = "com.rubenmfp.iptvapple"
 DEPLOY = "17.0"
-VERSION = "0.1"
-BUILD = "1"
+VERSION = "0.2"
+BUILD = "2"
 DISPLAY_NAME = "IptvTV"
 
 SOURCE_EXT = {".swift": "sourcecode.swift"}
@@ -98,8 +98,11 @@ def main():
     base_xcconfig = uid("file", "Config/Base.xcconfig")
     add(base_xcconfig, "PBXFileReference",
         "lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = \"<group>\";")
+    info_plist = uid("file", "Config/Info.plist")
+    add(info_plist, "PBXFileReference",
+        "lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = \"<group>\";")
     add(config_group, "PBXGroup",
-        f"children = (\n\t\t\t\t{base_xcconfig} /* Base.xcconfig */,\n\t\t\t);\n\t\t\tpath = Config;\n\t\t\tsourceTree = \"<group>\";")
+        f"children = (\n\t\t\t\t{base_xcconfig} /* Base.xcconfig */,\n\t\t\t\t{info_plist} /* Info.plist */,\n\t\t\t);\n\t\t\tpath = Config;\n\t\t\tsourceTree = \"<group>\";")
 
     target_sources = {"ios": [], "tv": []}
     target_resources = {"ios": [], "tv": []}
@@ -167,6 +170,7 @@ def main():
             "CURRENT_PROJECT_VERSION": BUILD,
             "ENABLE_PREVIEWS": "YES",
             "GENERATE_INFOPLIST_FILE": "YES",
+            "INFOPLIST_FILE": "Config/Info.plist",
             "INFOPLIST_KEY_CFBundleDisplayName": DISPLAY_NAME,
             "INFOPLIST_KEY_UIUserInterfaceStyle": "Dark",
             "LD_RUNPATH_SEARCH_PATHS": ["$(inherited)", "@executable_path/Frameworks"],
