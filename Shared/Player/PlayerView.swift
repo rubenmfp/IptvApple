@@ -20,7 +20,14 @@ struct VideoSurface: UIViewRepresentable {
 }
 
 /// Éléments sélectionnables du lecteur (Apple TV).
-enum PlayerFocus: Hashable { case surface, timeline, back, play, forward, audio, subtitles, speed, aspect }
+enum PlayerFocus: Hashable { case surface, timeline, back, play, forward, audio, subtitles, speed, aspect, rotation }
+
+/// Panneaux d'options (Apple TV).
+enum OptionPanel: Equatable {
+    case audio, subtitles, speed
+    var title: String { self == .audio ? "Audio" : self == .subtitles ? "Sous-titres" : "Vitesse" }
+    var origin: PlayerFocus { self == .audio ? .audio : self == .subtitles ? .subtitles : .speed }
+}
 
 struct PlayerView: View {
     let req: PlayRequest
@@ -35,6 +42,12 @@ struct PlayerView: View {
     @State private var osd = ""          // message bref : « +10 s »
     @State private var osdTask: Task<Void, Never>?
     @FocusState private var focus: PlayerFocus?
+    #if os(tvOS)
+    @State private var panel: OptionPanel?
+    @FocusState private var panelFocus: Int?
+    #else
+    @State private var rotation = Prefs.rotation
+    #endif
 
     var body: some View {
         ZStack {
@@ -47,6 +60,9 @@ struct PlayerView: View {
             #endif
             stateLayer
             if controls { controlsLayer.transition(.opacity) }
+            #if os(tvOS)
+            if let p = panel { optionPanel(p).transition(.move(edge: .trailing).combined(with: .opacity)) }
+            #endif
             if !osd.isEmpty {
                 Text(osd).font(.title2.bold()).padding(.horizontal, 22).padding(.vertical, 12)
                     .background(.black.opacity(0.6), in: Capsule()).foregroundStyle(.white)
@@ -72,7 +88,8 @@ struct PlayerView: View {
         .onChange(of: focus) { _, _ in if controls { scheduleHide() } }
         #if os(tvOS)
         .onExitCommand {
-            if controls, engine.phase != .opening, !isFailed { hideControls() } else { close() }
+            if panel != nil { closePanel() }
+            else if controls, engine.phase != .opening, !isFailed { hideControls() } else { close() }
         }
         .onPlayPauseCommand { engine.togglePause(); showControls() }
         #endif
@@ -178,13 +195,25 @@ struct PlayerView: View {
                 iconButton("goforward.10", "Avancer de 10 s", .forward) { seek(10) }
             }
             Spacer(minLength: 10)
+            #if os(tvOS)
+            iconButton("speaker.wave.2", "Audio", .audio) { openPanel(.audio) }
+            iconButton("captions.bubble", "Sous-titres", .subtitles) { openPanel(.subtitles) }
+            if !req.live { iconButton("gauge.with.dots.needle.67percent", "Vitesse", .speed) { openPanel(.speed) } }
+            #else
             OptionsMenus(engine: engine, live: req.live, focus: $focus)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                iconButton(rotation == 1 ? "rotate.right" : "lock.rotation", "Rotation", .rotation) { nextRotation() }
+            }
+            #endif
             iconButton("aspectratio", "Format : " + engine.aspect.rawValue, .aspect) {
                 engine.nextAspect()
                 flash("Format : " + engine.aspect.rawValue)
             }
         }
         .foregroundStyle(.white)
+        #if os(tvOS)
+        .disabled(panel != nil)
+        #endif
     }
 
     private func iconButton(_ icon: String, _ text: String, _ f: PlayerFocus, action: @escaping () -> Void) -> some View {
@@ -233,6 +262,9 @@ struct PlayerView: View {
         try? AVAudioSession.sharedInstance().setActive(true)
         #endif
         UIApplication.shared.isIdleTimerDisabled = true
+        #if os(iOS)
+        applyRotation()
+        #endif
         engine.onStarted = { url in
             if !req.live, !url.pathExtension.isEmpty { Store.setGoodExt(req.kind, url.pathExtension) }
             if req.live { Store.addRecentLive(req.key) } else { Store.addRecent(req.key) }
@@ -245,6 +277,9 @@ struct PlayerView: View {
         saveProgress()
         engine.stop()
         UIApplication.shared.isIdleTimerDisabled = false
+        #if os(iOS)
+        Orientation.release()
+        #endif
         onClose()
     }
 
@@ -293,9 +328,103 @@ struct PlayerView: View {
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
-            if !Task.isCancelled, engine.phase == .playing { hideControls() }
+            if !Task.isCancelled, engine.phase == .playing, !panelOpen { hideControls() }
         }
     }
+
+    #if os(tvOS)
+    private var panelOpen: Bool { panel != nil }
+
+    /// Panneau d'options à droite (Apple TV) : plus fiable que les menus du système, et Retour le referme
+    /// en laissant la sélection sur le bouton d'où l'on vient.
+    private func openPanel(_ p: OptionPanel) {
+        withAnimation(.easeOut(duration: 0.2)) { panel = p }
+        let sel = panelItems(p).firstIndex { $0.on } ?? 0
+        DispatchQueue.main.async { panelFocus = sel }
+        hideTask?.cancel()
+    }
+
+    private func closePanel() {
+        guard let p = panel else { return }
+        withAnimation(.easeIn(duration: 0.2)) { panel = nil }
+        DispatchQueue.main.async { focus = p.origin }
+        scheduleHide()
+    }
+
+    private struct PanelItem { let title: String; let on: Bool; let action: () -> Void }
+
+    private func panelItems(_ p: OptionPanel) -> [PanelItem] {
+        switch p {
+        case .audio:
+            return engine.audioTracks.map { t in PanelItem(title: t.name, on: t.id == engine.currentAudio) { engine.setAudio(t.id) } }
+        case .subtitles:
+            return engine.subtitleTracks.map { t in
+                PanelItem(title: t.id < 0 ? "Désactivés" : t.name, on: t.id == engine.currentSubtitle) { engine.setSubtitle(t.id) }
+            }
+        case .speed:
+            return [0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map { r in
+                PanelItem(title: r == 1 ? "Normale" : String(format: "×%g", r), on: abs(Double(engine.rate) - r) < 0.01) { engine.setRate(Float(r)) }
+            }
+        }
+    }
+
+    private func optionPanel(_ p: OptionPanel) -> some View {
+        let items = panelItems(p)
+        return HStack {
+            Spacer()
+            VStack(alignment: .leading, spacing: 14) {
+                Text(p.title).font(.title3.bold()).foregroundStyle(.white).padding(.bottom, 6)
+                if items.isEmpty {
+                    Text(p == .subtitles ? "Aucun sous-titre" : "Aucune piste").foregroundStyle(Theme.dim)
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(items.enumerated()), id: \.offset) { i, it in
+                            Button {
+                                it.action()
+                                closePanel()
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "checkmark").opacity(it.on ? 1 : 0)
+                                    Text(it.title).lineLimit(1)
+                                    Spacer(minLength: 0)
+                                }
+                                .frame(width: 520, alignment: .leading)
+                            }
+                            .focused($panelFocus, equals: i)
+                        }
+                    }
+                    .padding(.vertical, 10)
+                }
+            }
+            .padding(40)
+            .frame(width: 640)
+            .frame(maxHeight: .infinity)
+            .background(.black.opacity(0.85))
+            .focusSection()
+        }
+        .ignoresSafeArea()
+    }
+    #else
+    private var panelOpen: Bool { false }
+
+    /// iPhone : paysage par défaut (comme Netflix) ; le bouton passe à « suit le téléphone », puis « portrait ».
+    private func nextRotation() {
+        rotation = (rotation + 1) % 3
+        Prefs.rotation = rotation
+        applyRotation()
+        flash(["Paysage", "Rotation automatique", "Portrait"][rotation])
+    }
+
+    private func applyRotation() {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return }
+        switch rotation {
+        case 1: Orientation.lock(.allButUpsideDown)
+        case 2: Orientation.lock(.portrait)
+        default: Orientation.lock(.landscape)
+        }
+    }
+    #endif
 
     private func hideControls() {
         hideTask?.cancel()

@@ -59,6 +59,12 @@ enum Files {
 
 /// Réglages simples (pas d'identifiants ici).
 enum Prefs {
+    /// Rotation pendant la lecture sur iPhone : 0 = paysage (défaut), 1 = suit le téléphone, 2 = portrait.
+    static var rotation: Int {
+        get { UserDefaults.standard.integer(forKey: "rotation") }
+        set { UserDefaults.standard.set(newValue, forKey: "rotation") }
+    }
+
     static var refreshDays: Int {
         get { let v = UserDefaults.standard.integer(forKey: "refreshDays"); return (1...5).contains(v) ? v : 1 }
         set { UserDefaults.standard.set(newValue, forKey: "refreshDays") }

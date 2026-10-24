@@ -8,6 +8,20 @@ import MobileVLCKit
 
 /// Moteur de lecture (VLCKit) : lit le .mkv, le HEVC 10 bits et le son MP2, que le lecteur d'Apple ne sait pas lire.
 /// Essaie une à une les adresses possibles (serveur, extension) et retient celle qui marche.
+/// Vue qui accueille l'image de VLC et signale ses changements de taille.
+final class VideoHostView: UIView {
+    var onResize: (() -> Void)?
+    private var last: CGSize = .zero
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if bounds.size != last {
+            last = bounds.size
+            for v in subviews { v.frame = bounds }
+            onResize?()
+        }
+    }
+}
+
 final class PlaybackClock: ObservableObject {
     @Published private(set) var timeMs = 0
     @Published private(set) var durationMs = 0
@@ -23,13 +37,14 @@ final class PlayerEngine: ObservableObject {
     }
 
     let player = VLCMediaPlayer()
-    let videoView: UIView = {
-        let v = UIView()
+    let videoView: VideoHostView = {
+        let v = VideoHostView()
         v.backgroundColor = .black
         v.isUserInteractionEnabled = false
         return v
     }()
 
+    /// Ne publie que les vrais changements : réaffecter la même valeur redessinerait l'écran (menus qui clignotent).
     @Published private(set) var phase: Phase = .opening
     /// Position et durée, publiées à part : l'écran du lecteur (menus compris) n'est pas redessiné quatre fois par seconde,
     /// seuls la barre de progression et l'heure de fin le sont.
@@ -52,6 +67,11 @@ final class PlayerEngine: ObservableObject {
 
     init() {
         player.drawable = videoView
+        // taille changée (rotation) : on réapplique le format, calculé d'après la taille de l'écran
+        videoView.onResize = { [weak self] in
+            guard let self, self.aspect != .original else { return }
+            self.apply(self.aspect)
+        }
     }
 
     deinit {
@@ -74,7 +94,7 @@ final class PlayerEngine: ObservableObject {
 
     private func open() {
         guard index < candidates.count else {
-            phase = .failed("Aucune adresse n'a fonctionné.\n" + errors.joined(separator: "\n"))
+            setPhase(.failed("Aucune adresse n'a fonctionné.\n" + errors.joined(separator: "\n")))
             timer?.invalidate()
             return
         }
@@ -85,7 +105,7 @@ final class PlayerEngine: ObservableObject {
         player.media = m
         started = false
         openedAt = Date()
-        phase = .opening
+        setPhase(.opening)
         player.play()
     }
 
@@ -94,7 +114,7 @@ final class PlayerEngine: ObservableObject {
         errors.append("· \(candidates[index].pathExtension.isEmpty ? "flux" : "." + candidates[index].pathExtension) : \(why)")
         player.stop()
         index += 1
-        phase = .opening
+        setPhase(.opening)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.open() }
     }
 
@@ -113,7 +133,7 @@ final class PlayerEngine: ObservableObject {
                     player.time = VLCTime(int: Int32(clamping: startAtMs))
                     startAtMs = 0
                 }
-                phase = .playing
+                setPhase(.playing)
                 return
             }
             switch st {
@@ -126,11 +146,11 @@ final class PlayerEngine: ObservableObject {
             return
         }
         switch st {
-        case .paused: phase = .paused
-        case .ended: phase = .ended
-        case .error: phase = .failed("La lecture s'est interrompue (erreur réseau ou fichier).")
-        case .stopped: if phase != .ended { phase = .ended }
-        default: if player.isPlaying { phase = .playing }
+        case .paused: setPhase(.paused)
+        case .ended: setPhase(.ended)
+        case .error: setPhase(.failed("La lecture s'est interrompue (erreur réseau ou fichier)."))
+        case .stopped: if phase != .ended { setPhase(.ended) }
+        default: if player.isPlaying { setPhase(.playing) }
         }
     }
 
@@ -160,10 +180,12 @@ final class PlayerEngine: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard let self, self.player.isPlaying else { return }
                 self.player.pause()
-                self.phase = .paused
+                self.setPhase(.paused)
             }
         }
     }
+
+    private func setPhase(_ p: Phase) { if phase != p { phase = p } }
 
     func stop() {
         timer?.invalidate()
@@ -173,7 +195,7 @@ final class PlayerEngine: ObservableObject {
 
     // ---------- commandes ----------
     func togglePause() {
-        if player.isPlaying { player.pause(); phase = .paused } else { player.play(); phase = .playing }
+        if player.isPlaying { player.pause(); setPhase(.paused) } else { player.play(); setPhase(.playing) }
     }
 
     func seek(by seconds: Int) {

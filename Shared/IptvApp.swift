@@ -3,6 +3,9 @@ import SwiftUI
 @main
 struct IptvApp: App {
     @StateObject private var model = AppModel()
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
