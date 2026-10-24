@@ -165,14 +165,15 @@ final class LanSync: ObservableObject {
         let l = (try? NWListener(using: params, on: NWEndpoint.Port(rawValue: Self.port)!)) ?? (try? NWListener(using: params))
         guard let l else { info = "Synchronisation indisponible : réseau inaccessible."; return }
         l.service = NWListener.Service(name: name, type: Self.type)
-        l.newConnectionHandler = { [weak self] c in
-            Task { @MainActor in await self?.serve(c) }
+        // (objet unique : on passe par LanSync.shared plutôt que de capturer self dans les rappels réseau)
+        l.newConnectionHandler = { c in
+            Task { @MainActor in await LanSync.shared.serve(c) }
         }
-        l.stateUpdateHandler = { [weak self] st in
+        l.stateUpdateHandler = { st in
             if case .failed = st {
                 Task { @MainActor in
-                    guard let self, self.running else { return }
-                    self.info = "Synchronisation : le port 38472 n'a pas pu être ouvert."
+                    let me = LanSync.shared
+                    if me.running { me.info = "Synchronisation : le port 38472 n'a pas pu être ouvert." }
                 }
             }
         }
@@ -200,12 +201,13 @@ final class LanSync: ObservableObject {
 
     private func browse() {
         let b = NWBrowser(for: .bonjour(type: Self.type, domain: nil), using: .tcp)
-        b.browseResultsChangedHandler = { [weak self] results, _ in
-            var found: [String: NWEndpoint] = [:]
+        b.browseResultsChangedHandler = { results, _ in
+            var all: [String: NWEndpoint] = [:]
             for r in results {
-                if case let .service(n, _, _, _) = r.endpoint, n.hasPrefix("IptvTV-") { found[n] = r.endpoint }
+                if case let .service(n, _, _, _) = r.endpoint, n.hasPrefix("IptvTV-") { all[n] = r.endpoint }
             }
-            Task { @MainActor in self?.found(found) }
+            let snapshot = all
+            Task { @MainActor in LanSync.shared.found(snapshot) }
         }
         b.start(queue: queue)
         browser = b
