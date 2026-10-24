@@ -15,7 +15,9 @@ enum Names {
     /// « MULTI » / « MULTi » isolé, n'importe où dans le titre.
     static let multiRe = Rx(#"\s*(?:[-–|]\s*)?\bMULT[Ii]\b"#)
     /// Mention technique sans parenthèses en fin de titre : « Titre MULTI », « Titre - VOSTFR », « Titre 4K ».
-    static let bareTailRe = Rx(#"(?i)(?:\s*[-–|:]\s*|\s+)(MULTI|VOSTFR|TRUEFRENCH|SUBFRENCH|VFF|VFQ|VFI|VF2|UHD|FHD|4K)\s*$"#)
+    static let bareTailRe = Rx(#"(?i)(?:\s*[-–|:]\s*|\s+)(MULTI|VOSTFR|TRUEFRENCH|SUBFRENCH|VFF|VFQ|VFI|VF2|UHD|FHD|4K|HD|SD)\s*$"#)
+    /// Qualité en tête sans barres : « HD - Titre », « SD: Titre ».
+    static let headQualRe = Rx(#"(?i)^\s*(4K|UHD|FHD|HD|SD)\s*[-–:|]\s*"#)
     static let emptyGroupRe = Rx(#"\s*(?:\(\s*\)|\[\s*\])"#)
     static let tailSepRe = Rx(#"\s*[-–|:(\[]\s*$"#)
     static let onlyJunkRe = Rx("(?i)^(?:\(junk))$")
@@ -54,6 +56,10 @@ enum Names {
                 if q == nil { q = upperQual(tag) }
                 t = t.substring(fromUTF16: m.range.location + m.range.length)
             }
+        }
+        if let m = headQualRe.first(t), m.range.location + m.range.length < (t as NSString).length {
+            if q == nil { q = upperQual(m.group(1, in: t) ?? "") }
+            t = t.substring(fromUTF16: m.range.location + m.range.length)
         }
         t = yearRe.replace(t)
         if q == nil {
@@ -123,7 +129,9 @@ enum Names {
             if g0.count > 1 {
                 let ids = uniq(g0.map(\.tmdb).filter { $0 > 0 })
                 let years = uniq(g0.map(\.year).filter { $0 > 0 })
-                if ids.count > 1 {
+                // identifiants TMDB différents : homonymes seulement si les années diffèrent aussi
+                // (les fournisseurs se trompent souvent d'identifiant entre la version HD et la version SD)
+                if ids.count > 1, years.count > 1, years.max()! - years.min()! > 1 {
                     parts = orderedGroups(g0) { $0.tmdb > 0 ? $0.tmdb : ids[0] }
                 } else if ids.isEmpty, years.count > 1, years.max()! - years.min()! > 1 {
                     parts = orderedGroups(g0) { $0.year > 0 ? $0.year : years[0] }

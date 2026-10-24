@@ -29,6 +29,14 @@ check(clean("Les Misérables UHD"), "Les Misérables", "UHD final")
 check(qual("Les Misérables UHD"), "4K", "UHD = 4K")
 check(clean("  Épisode 3 |FR"), "Épisode 3", "langue derrière une barre")
 
+check(clean("Titre HD"), "Titre", "HD final")
+check(qual("Titre HD"), "HD", "qualité HD finale")
+check(clean("Titre - SD"), "Titre", "SD final")
+check(clean("HD - Titre"), "Titre", "HD en tête")
+check(qual("SD: Titre"), "SD", "SD en tête")
+check(clean("SD"), "SD", "titre réduit à SD : gardé")
+check(clean("Titre HD MULTI"), "Titre", "HD puis MULTI")
+
 // ---------- clé de regroupement ----------
 let k = Names.mergeKey("L'Été")
 check(Names.mergeKey("L’été"), k, "apostrophe typographique")
@@ -50,6 +58,11 @@ check(merged[0].id, 2, "version préférée = FHD")
 check(merged[0].poster, "p", "affiche reprise d'une version")
 let homonyms = Names.mergeItems([film(10, "Dune", tmdb: 841, year: 1984), film(11, "Dune", tmdb: 438631, year: 2021)])
 check(homonyms.map(\.name), ["Dune (1984)", "Dune (2021)"], "homonymes séparés avec l'année")
+let wrongIds = Names.mergeItems([film(20, "|HD| Lift", tmdb: 111, year: 2024), film(21, "Lift SD", tmdb: 222, year: 2024)])
+check(wrongIds.count, 1, "même année, identifiants TMDB différents : regroupés")
+check(wrongIds.first?.variants.map(\.q) ?? [], ["HD", "SD"], "versions HD et SD")
+let noYear = Names.mergeItems([film(30, "Lift HD", tmdb: 111), film(31, "Lift SD", tmdb: 222)])
+check(noYear.count, 1, "identifiants différents sans année : regroupés")
 
 // ---------- chaînes ----------
 check(Names.cleanLive("FR: TF1 FHD (backup)").name, "FR: TF1", "chaîne nettoyée")
