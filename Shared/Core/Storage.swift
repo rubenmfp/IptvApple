@@ -98,6 +98,25 @@ enum Prefs {
         return v
     }
 
+    /// Rendu sonore du lecteur : 0 = normal, 1 = basses, 2 = dialogues, 3 = cinéma ; + volume amplifié.
+    static var fxPreset: Int {
+        get { UserDefaults.standard.integer(forKey: "fxp") }
+        set { UserDefaults.standard.set(newValue, forKey: "fxp") }
+    }
+    static var fxBoost: Bool {
+        get { UserDefaults.standard.bool(forKey: "fxb") }
+        set { UserDefaults.standard.set(newValue, forKey: "fxb") }
+    }
+    /// Diagnostic du lecteur (en bas des réglages) : dernière lecture réussie, dernière erreur.
+    static var playerNote: String {
+        get { UserDefaults.standard.string(forKey: "pnote") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "pnote") }
+    }
+    static var playerErr: String {
+        get { UserDefaults.standard.string(forKey: "perr") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "perr") }
+    }
+
     static var refreshDays: Int {
         get { let v = UserDefaults.standard.integer(forKey: "refreshDays"); return (1...5).contains(v) ? v : 1 }
         set { UserDefaults.standard.set(newValue, forKey: "refreshDays") }

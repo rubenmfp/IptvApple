@@ -114,7 +114,9 @@ final class PlayerEngine: ObservableObject {
 
     private func open() {
         guard index < candidates.count else {
-            setPhase(.failed("Aucune adresse n'a fonctionné.\n" + errors.joined(separator: "\n")))
+            let msg = "Aucune adresse n'a fonctionné.\n" + errors.joined(separator: "\n")
+            Prefs.playerErr = Self.stampNow() + " · " + msg.replacingOccurrences(of: "\n", with: " ")
+            setPhase(.failed(msg))
             timer?.invalidate()
             return
         }
@@ -149,6 +151,11 @@ final class PlayerEngine: ObservableObject {
             if player.isPlaying && (t > 0 || player.hasVideoOut) {
                 started = true
                 onStarted?(candidates[index])
+                applySound()
+                let ext = candidates[index].pathExtension.isEmpty ? "flux" : "." + candidates[index].pathExtension
+                Prefs.playerNote = Self.stampNow() + " · " + (live ? "direct" : "vidéo") + " · " + ext
+                    + (candidates.count > 1 ? " (essai \(index + 1) sur \(candidates.count))" : "")
+                    + (errors.isEmpty ? "" : " · échecs avant : " + errors.map { $0.replacingOccurrences(of: "· ", with: "") }.joined(separator: ", "))
                 if startAtMs > 0 {
                     player.time = VLCTime(int: Int32(clamping: startAtMs))
                     startAtMs = 0
@@ -171,7 +178,10 @@ final class PlayerEngine: ObservableObject {
         switch st {
         case .paused: setPhase(.paused)
         case .ended: setPhase(.ended)
-        case .error: setPhase(.failed("La lecture s'est interrompue (erreur réseau ou fichier)."))
+        case .error:
+            if case .failed = phase { break }
+            Prefs.playerErr = Self.stampNow() + " · interruption en cours de lecture (.\(candidates[index].pathExtension))"
+            setPhase(.failed("La lecture s'est interrompue (erreur réseau ou fichier)."))
         case .stopped: if phase != .ended { setPhase(.ended) }
         default: if player.isPlaying { setPhase(.playing) }
         }
@@ -241,6 +251,38 @@ final class PlayerEngine: ObservableObject {
     }
 
     func setRate(_ r: Float) { player.rate = r; rate = r }
+
+    // ---------- rendu sonore (égaliseur de VLC) ----------
+    static let soundNames = ["Normal", "Basses renforcées", "Dialogues plus clairs", "Cinéma"]
+    /// 0 = normal, 1 = basses, 2 = dialogues, 3 = cinéma ; `boost` = volume amplifié. Retenus pour les lectures suivantes.
+    @Published private(set) var sound = Prefs.fxPreset
+    @Published private(set) var boost = Prefs.fxBoost
+
+    func setSound(_ p: Int) { sound = p; Prefs.fxPreset = p; applySound() }
+    func setBoost(_ b: Bool) { boost = b; Prefs.fxBoost = b; applySound() }
+
+    /// Gains (dB) des 10 bandes de VLC : 60, 170, 310, 600 Hz, 1, 3, 6, 12, 14, 16 kHz.
+    private func applySound() {
+        let bands: [[CGFloat]] = [[], [7, 6, 4, 2, 0, 0, 0, 0, 0, 0], [-4, -3, -1, 1, 3, 4, 3, 1, 0, -1], [5, 3, 1, 0, -1, 1, 2, 3, 3, 2]]
+        let pre: [CGFloat] = [0, -4, 0, -3]
+        let p = (0..<bands.count).contains(sound) ? sound : 0
+        if p == 0 && !boost {
+            player.equalizerEnabled = false
+            return
+        }
+        player.equalizerEnabled = true
+        let b = bands[p]
+        for i in 0..<Int(player.numberOfBands) {
+            player.setAmplification(i < b.count ? b[i] : 0, forBand: UInt32(i))
+        }
+        player.preAmplification = pre[p] + (boost ? 9 : 0)
+    }
+
+    static func stampNow() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "dd/MM HH:mm"
+        return f.string(from: Date())
+    }
 
     struct Track: Hashable { let id: Int32; let name: String }
 

@@ -352,10 +352,8 @@ struct ItemSheet: View {
 
     private func startFilm(at ms: Int) {
         guard let v = chosen else { return }
-        play = PlayRequest(title: item.name, key: "vod:\(v.id)", kind: "vod",
-                           urls: model.playURLs(kind: "vod", id: v.id, ext: info?.ext.isEmpty == false && v.id == item.id ? info!.ext : v.ext,
-                                                key: "vod:\(v.id)"),
-                           startMs: ms)
+        play = model.filmRequest(item, variant: v, at: ms,
+                                 ext: info?.ext.isEmpty == false && v.id == item.id ? info!.ext : v.ext)
     }
 
     private var versions: some View {

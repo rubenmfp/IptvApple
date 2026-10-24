@@ -17,7 +17,15 @@ struct PlayRequest: Identifiable {
     var channels: [Item] = []
     var listName = ""
     var quality: String?
+    /// Autres versions du même titre, proposées si la lecture échoue.
+    var alts: [AltVersion] = []
     var live: Bool { kind == "live" }
+}
+
+/// Autre version d'un titre (qualité différente) : libellé et lecture à lancer.
+struct AltVersion {
+    let label: String
+    let make: () -> PlayRequest
 }
 
 /// Surface vidéo de VLC dans SwiftUI.
@@ -167,16 +175,46 @@ struct PlayerView: View {
                 Text("Lecture impossible").font(.title3.bold()).foregroundStyle(.white)
                 Text(msg).font(.footnote).foregroundStyle(Theme.dim).multilineTextAlignment(.center)
                 Text("Un VPN actif sur l'appareil peut provoquer ce problème.").font(.footnote).foregroundStyle(Theme.dim)
-                Button("Fermer") { close() }
-                    #if os(iOS)
-                    .buttonStyle(.borderedProminent)
-                    #endif
+                failureButtons
             }
             .padding(30)
             .frame(maxWidth: 800)
             .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 16))
         default: EmptyView()
         }
+    }
+
+    /// Écran d'erreur : réessayer, autre qualité du même titre, fermer.
+    private var failureButtons: some View {
+        let liveVariants = req.live ? Array((req.channel?.variants ?? []).filter { $0.q != req.quality }.prefix(3)) : []
+        let labels: [String] = req.live ? liveVariants.map { $0.q == "?" ? "Standard" : $0.q } : req.alts.prefix(3).map(\.label)
+        return VStack(spacing: 12) {
+            if !labels.isEmpty {
+                Text("Essayer une autre qualité :").font(.footnote).foregroundStyle(Theme.dim)
+                HStack(spacing: Theme.tv ? 24 : 10) {
+                    ForEach(Array(labels.enumerated()), id: \.offset) { i, l in
+                        Button(l) {
+                            if req.live { changeQuality(liveVariants[i]) } else { switchTo(req.alts[i].make()) }
+                        }
+                    }
+                }
+            }
+            HStack(spacing: Theme.tv ? 24 : 10) {
+                Button("Réessayer") { switchTo(req) }
+                Button("Fermer") { close() }
+            }
+        }
+        #if os(iOS)
+        .buttonStyle(.bordered)
+        #endif
+    }
+
+    /// Lance une autre lecture sans quitter le lecteur (une seule connexion : fermeture, petite pause, ouverture).
+    private func switchTo(_ n: PlayRequest) {
+        engine.stop()
+        req = n
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { startPlayback(n) }
+        showControls()
     }
 
     // MARK: - Commandes
@@ -412,13 +450,9 @@ struct PlayerView: View {
     private func startReco(_ item: Item) {
         saveProgress()
         let n = model.filmRequest(item)
-        engine.stop()
         recoDismissed = false
         recos = model.recommendations(after: n.key)
-        req = n
-        // une seule connexion autorisée : petite pause entre la fermeture et l'ouverture
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { startPlayback(n) }
-        showControls()
+        switchTo(n)
     }
 
     private func goNext() {
@@ -628,7 +662,13 @@ struct PlayerView: View {
     private func panelItems(_ p: OptionPanel) -> [PanelItem] {
         switch p {
         case .audio:
-            return engine.audioTracks.map { t in PanelItem(title: t.name, on: t.id == engine.currentAudio) { engine.setAudio(t.id) } }
+            var out = engine.audioTracks.map { t in PanelItem(title: t.name, on: t.id == engine.currentAudio) { engine.setAudio(t.id) } }
+            for (i, n) in PlayerEngine.soundNames.enumerated() {
+                out.append(PanelItem(title: "Son : " + n, on: engine.sound == i) { engine.setSound(i) })
+            }
+            let b = engine.boost
+            out.append(PanelItem(title: "Volume amplifié", on: b) { engine.setBoost(!b) })
+            return out
         case .subtitles:
             return engine.subtitleTracks.map { t in
                 PanelItem(title: t.id < 0 ? "Désactivés" : t.name, on: t.id == engine.currentSubtitle) { engine.setSubtitle(t.id) }
@@ -932,6 +972,12 @@ struct OptionsMenus: View {
             if tracks.isEmpty { Text("Aucune piste") }
             ForEach(tracks, id: \.self) { t in
                 Button { engine.setAudio(t.id); onPick() } label: { check(t.name, on: t.id == engine.currentAudio) }
+            }
+            Section("Rendu sonore") {
+                ForEach(Array(PlayerEngine.soundNames.enumerated()), id: \.offset) { i, n in
+                    Button { engine.setSound(i); onPick() } label: { check(n, on: engine.sound == i) }
+                }
+                Button { engine.setBoost(!engine.boost); onPick() } label: { check("Volume amplifié", on: engine.boost) }
             }
         } label: { icon("speaker.wave.2", "Audio") }
         .focused(focus, equals: .audio)

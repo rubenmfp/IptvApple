@@ -317,15 +317,22 @@ final class AppModel: ObservableObject {
         return Array((same + pool.shuffled().prefix(20).filter { !keys.contains($0.key) }).prefix(4))
     }
 
-    /// Film lancé depuis les recommandations de fin de film : version de qualité préférée, reprise si déjà commencé.
-    func filmRequest(_ item: Item) -> PlayRequest {
-        let v = item.variants.first { $0.q == Store.prefQuality } ?? item.variants.first
+    /// Lecture d'un film : version choisie (sinon la qualité préférée), reprise si déjà commencé (ou position donnée),
+    /// et les autres versions en secours si la lecture échoue.
+    func filmRequest(_ item: Item, variant: Variant? = nil, at ms: Int? = nil, ext: String? = nil) -> PlayRequest {
+        let v = variant ?? item.variants.first { $0.q == Store.prefQuality } ?? item.variants.first
         let id = v?.id ?? item.id
         let key = "vod:\(id)"
         let pos = Store.pos(key), dur = Store.dur(key)
-        let start = pos > 0 && !Store.seen(key) && (dur == 0 || pos < dur * 9 / 10) ? pos : 0
-        return PlayRequest(title: item.name, key: key, kind: "vod",
-                           urls: playURLs(kind: "vod", id: id, ext: v?.ext ?? item.ext, key: key), startMs: start)
+        let start = ms ?? (pos > 0 && !Store.seen(key) && (dur == 0 || pos < dur * 9 / 10) ? pos : 0)
+        var r = PlayRequest(title: item.name, key: key, kind: "vod",
+                            urls: playURLs(kind: "vod", id: id, ext: ext ?? v?.ext ?? item.ext, key: key), startMs: start)
+        r.alts = item.variants.filter { $0.id != id }.map { o in
+            AltVersion(label: o.q == "?" ? "Standard" : o.q) { [weak self] in
+                self?.filmRequest(item, variant: o, at: start) ?? PlayRequest(title: item.name, key: key, kind: "vod", urls: [])
+            }
+        }
+        return r
     }
 
     func setTmdbKey(_ k: String) {

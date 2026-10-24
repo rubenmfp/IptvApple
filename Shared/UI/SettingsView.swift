@@ -117,9 +117,15 @@ struct SettingsView: View {
                     Text("Lit la fiche de chaque film, une à la fois (long : plusieurs dizaines de minutes). Les séries sont déjà indexées.")
                         .font(.footnote).foregroundStyle(Theme.dim)
                 }
+                Section("Diagnostic du lecteur") {
+                    Text("Dernière lecture : " + (Prefs.playerNote.isEmpty ? "aucune" : Prefs.playerNote))
+                    Text("Dernière erreur : " + (Prefs.playerErr.isEmpty ? "aucune" : Prefs.playerErr)).foregroundStyle(Theme.dim)
+                    Text("Lecteur VLC. L'appli essaie plusieurs adresses (extension annoncée, .mkv, .mp4, .ts…) et retient celle qui marche.")
+                        .font(.footnote).foregroundStyle(Theme.dim)
+                }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.8 : synchronisation par le Wi-Fi avec la TV Android.").foregroundStyle(Theme.dim)
+                    Text("Version 0.9 : rendu sonore, diagnostic du lecteur, autre qualité en cas d'échec.").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")
