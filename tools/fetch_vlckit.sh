@@ -6,9 +6,9 @@ cd "$(dirname "$0")/.."
 mkdir -p Frameworks
 fetch() {  # nom url sha256
   local name=$1 url=$2 sum=$3
-  if [ -d "Frameworks/$name.xcframework" ]; then echo "$name déjà présent"; return; fi
+  if [ -d "Frameworks/$name.xcframework" ]; then echo "${name} déjà présent"; return; fi
   local tmp; tmp=$(mktemp -d)
-  echo "Téléchargement de $name…"
+  echo "Téléchargement de ${name}…"
   curl -fsSL -o "$tmp/a.tar.xz" "$url"
   echo "$sum  $tmp/a.tar.xz" | shasum -a 256 -c -
   tar xf "$tmp/a.tar.xz" -C "$tmp"
