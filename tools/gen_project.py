@@ -17,8 +17,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = "IptvApple"
 BUNDLE = "com.rubenmfp.iptvapple"
 DEPLOY = "17.0"
-VERSION = "0.3.4"
-BUILD = "9"
+VERSION = "0.3.5"
+BUILD = "10"
 DISPLAY_NAME = "IptvTV"
 
 SOURCE_EXT = {".swift": "sourcecode.swift"}

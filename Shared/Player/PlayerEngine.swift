@@ -154,6 +154,7 @@ final class PlayerEngine: ObservableObject {
                     startAtMs = 0
                 }
                 startedAt = Date()
+                if defaultAspect != .original { apply(defaultAspect) }
                 setPhase(.playing)
                 return
             }
@@ -216,9 +217,13 @@ final class PlayerEngine: ObservableObject {
     }
 
     // ---------- commandes ----------
+    /// Pause / lecture d'après l'état affiché (pendant une mise en mémoire tampon, VLC ne se dit pas « en lecture »).
     func togglePause() {
-        if player.isPlaying { player.pause(); setPhase(.paused) } else { player.play(); setPhase(.playing) }
+        if phase == .paused { player.play(); setPhase(.playing) } else { player.pause(); setPhase(.paused) }
     }
+
+    /// Format appliqué au démarrage de chaque lecture.
+    var defaultAspect: Aspect = .original
 
     func seek(by seconds: Int) {
         guard !live, durationMs > 0 else { return }

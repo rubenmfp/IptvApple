@@ -65,6 +65,12 @@ enum Prefs {
         set { UserDefaults.standard.set(newValue, forKey: "rotation") }
     }
 
+    /// Format d'image choisi en dernier sur iPhone (vide = « Plein écran »).
+    static var aspect: String {
+        get { UserDefaults.standard.string(forKey: "aspect") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "aspect") }
+    }
+
     static var refreshDays: Int {
         get { let v = UserDefaults.standard.integer(forKey: "refreshDays"); return (1...5).contains(v) ? v : 1 }
         set { UserDefaults.standard.set(newValue, forKey: "refreshDays") }

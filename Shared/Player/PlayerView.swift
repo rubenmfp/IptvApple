@@ -59,7 +59,7 @@ struct PlayerView: View {
             #if os(tvOS)
             tvSurface
             #else
-            TapSurface(onTap: toggleControls, onDoubleTap: { left in seek(left ? -10 : 10) })
+            TapSurface(onTap: toggleControls, onDoubleTap: { left in doubleTap(left) }).ignoresSafeArea()
             #endif
             stateLayer
             if controls { controlsLayer.transition(.opacity) }
@@ -72,8 +72,10 @@ struct PlayerView: View {
                     .allowsHitTesting(false)
             }
         }
+        #if os(tvOS)
         .ignoresSafeArea()
-        #if os(iOS)
+        #else
+        // iPhone : les commandes restent dans la zone sûre (titre et heure sous l'encoche), l'image occupe tout l'écran
         .statusBarHidden(true)
         #endif
         .persistentSystemOverlays(.hidden)
@@ -143,8 +145,8 @@ struct PlayerView: View {
                 Spacer()
                 ClockView(clock: engine.clock, rate: engine.rate, live: req.live)
             }
-            .padding(.horizontal, Theme.tv ? 80 : 20)
-            .padding(.top, Theme.tv ? 50 : 16)
+            .padding(.horizontal, Theme.tv ? 80 : 12)
+            .padding(.top, Theme.tv ? 50 : 4)
 
             Spacer(minLength: 0)
 
@@ -152,8 +154,8 @@ struct PlayerView: View {
                 if !req.live { timeline }
                 buttonRow
             }
-            .padding(.horizontal, Theme.tv ? 80 : 20)
-            .padding(.bottom, Theme.tv ? 50 : 14)
+            .padding(.horizontal, Theme.tv ? 80 : 12)
+            .padding(.bottom, Theme.tv ? 50 : 4)
         }
         .background(
             LinearGradient(colors: [.black.opacity(0.65), .clear, .clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
@@ -224,13 +226,17 @@ struct PlayerView: View {
         iconButton("captions.bubble", "Sous-titres", .subtitles) { openPanel(.subtitles) }
         if !req.live { iconButton("gauge.with.dots.needle.67percent", "Vitesse", .speed) { openPanel(.speed) } }
         #else
-        OptionsMenus(engine: engine, live: req.live, focus: $focus)
+        OptionsMenus(engine: engine, live: req.live, focus: $focus,
+                     onOpen: { keepControls(20) }, onPick: { scheduleHide() })
         if UIDevice.current.userInterfaceIdiom == .phone {
             iconButton(rotation == 1 ? "rotate.right" : "lock.rotation", "Rotation", .rotation) { nextRotation() }
         }
         #endif
         iconButton("aspectratio", "Format : " + engine.aspect.rawValue, .aspect) {
             engine.nextAspect()
+            #if os(iOS)
+            Prefs.aspect = engine.aspect.rawValue
+            #endif
             flash("Format : " + engine.aspect.rawValue)
         }
     }
@@ -238,12 +244,13 @@ struct PlayerView: View {
     private func iconButton(_ icon: String, _ text: String, _ f: PlayerFocus, action: @escaping () -> Void) -> some View {
         Button(action: { action(); scheduleHide() }) {
             Image(systemName: icon)
-                .font(.system(size: Theme.tv ? 30 : 24, weight: .semibold))
-                .frame(width: Theme.tv ? 70 : 44, height: Theme.tv ? 70 : 44)
+                .font(.system(size: Theme.tv ? 30 : 26, weight: .semibold))
+                .frame(width: Theme.tv ? 70 : 48, height: Theme.tv ? 70 : 48)
+                .contentShape(Rectangle())
                 .accessibilityLabel(text)
         }
         #if os(iOS)
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle())
         #endif
         .focused($focus, equals: f)
     }
@@ -283,6 +290,10 @@ struct PlayerView: View {
         UIApplication.shared.isIdleTimerDisabled = true
         #if os(iOS)
         applyRotation()
+        #endif
+        #if os(iOS)
+        // iPhone : « Plein écran » par défaut (beaucoup de films ont des bandes noires incrustées), puis le dernier choix
+        engine.defaultAspect = PlayerEngine.Aspect(rawValue: Prefs.aspect) ?? .fill
         #endif
         engine.onStarted = { url in
             if !req.live, !url.pathExtension.isEmpty { Store.setGoodExt(req.kind, url.pathExtension) }
@@ -333,7 +344,32 @@ struct PlayerView: View {
         osdTask = Task { try? await Task.sleep(nanoseconds: 1_200_000_000); if !Task.isCancelled { osd = "" } }
     }
 
-    private func toggleControls() { controls ? hideControls() : showControls() }
+    @State private var lastToggle = Date.distantPast
+    @State private var controlsBeforeToggle = false
+
+    /// Un appui affiche ou masque tout de suite les commandes (sans attendre un éventuel second appui).
+    private func toggleControls() {
+        controlsBeforeToggle = controls
+        lastToggle = Date()
+        controls ? hideControls() : showControls()
+    }
+
+    /// Deux appuis : −/+10 s. Le premier appui avait basculé les commandes : on revient à l'état d'avant.
+    private func doubleTap(_ left: Bool) {
+        if Date().timeIntervalSince(lastToggle) < 0.6 {
+            if controlsBeforeToggle { showControls() } else { hideControls() }
+        }
+        seek(left ? -10 : 10)
+    }
+
+    /// Garde les commandes affichées plus longtemps (menu ouvert).
+    private func keepControls(_ seconds: UInt64) {
+        hideTask?.cancel()
+        hideTask = Task {
+            try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+            if !Task.isCancelled, engine.phase == .playing, !panelOpen { hideControls() }
+        }
+    }
 
     private func showControls() {
         let wasHidden = !controls
@@ -550,34 +586,39 @@ struct OptionsMenus: View {
     @ObservedObject var engine: PlayerEngine
     let live: Bool
     var focus: FocusState<PlayerFocus?>.Binding
+    var onOpen: () -> Void = {}
+    var onPick: () -> Void = {}
 
     var body: some View {
         Menu {
             let tracks = engine.audioTracks
             if tracks.isEmpty { Text("Aucune piste") }
             ForEach(tracks, id: \.self) { t in
-                Button { engine.setAudio(t.id) } label: { check(t.name, on: t.id == engine.currentAudio) }
+                Button { engine.setAudio(t.id); onPick() } label: { check(t.name, on: t.id == engine.currentAudio) }
             }
         } label: { icon("speaker.wave.2", "Audio") }
         .focused(focus, equals: .audio)
+        .simultaneousGesture(TapGesture().onEnded { onOpen() })
 
         Menu {
             ForEach(engine.subtitleTracks, id: \.self) { t in
-                Button { engine.setSubtitle(t.id) } label: { check(t.id < 0 ? "Désactivés" : t.name, on: t.id == engine.currentSubtitle) }
+                Button { engine.setSubtitle(t.id); onPick() } label: { check(t.id < 0 ? "Désactivés" : t.name, on: t.id == engine.currentSubtitle) }
             }
             if engine.subtitleTracks.isEmpty { Text("Aucun sous-titre") }
         } label: { icon("captions.bubble", "Sous-titres") }
         .focused(focus, equals: .subtitles)
+        .simultaneousGesture(TapGesture().onEnded { onOpen() })
 
         if !live {
             Menu {
                 ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { r in
-                    Button { engine.setRate(Float(r)) } label: {
+                    Button { engine.setRate(Float(r)); onPick() } label: {
                         check(r == 1 ? "Normale" : String(format: "×%g", r), on: abs(Double(engine.rate) - r) < 0.01)
                     }
                 }
             } label: { icon("gauge.with.dots.needle.67percent", "Vitesse") }
             .focused(focus, equals: .speed)
+            .simultaneousGesture(TapGesture().onEnded { onOpen() })
         }
     }
 
@@ -607,8 +648,8 @@ struct TapSurface: UIViewRepresentable {
         v.backgroundColor = .clear
         let double = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.double(_:)))
         double.numberOfTapsRequired = 2
+        // pas d'attente du second appui : l'affichage des commandes est immédiat
         let single = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.single(_:)))
-        single.require(toFail: double)
         v.addGestureRecognizer(double)
         v.addGestureRecognizer(single)
         return v
@@ -627,6 +668,18 @@ struct TapSurface: UIViewRepresentable {
             guard let v = g.view else { return }
             onDoubleTap(g.location(in: v).x < v.bounds.width / 2)
         }
+    }
+}
+#endif
+
+#if os(iOS)
+/// Bouton qui réagit visiblement au toucher (léger rétrécissement), comme dans les lecteurs connus.
+struct PressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.85 : 1)
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 #endif
