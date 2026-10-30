@@ -750,9 +750,15 @@ struct PosterViewer: View {
     @State private var lastOffset: CGSize = .zero
     @State private var drag: CGFloat = 0
 
+    /// Le fond s'éclaircit à mesure qu'on fait glisser l'affiche pour la fermer.
+    private var backdropOpacity: Double {
+        let d = Double(abs(drag))
+        return 1.0 - Swift.min(0.6, d / 600.0)
+    }
+
     var body: some View {
         ZStack {
-            Color.black.opacity(1 - min(0.6, abs(drag) / 600)).ignoresSafeArea()
+            Color.black.opacity(backdropOpacity).ignoresSafeArea()
             if let image {
                 Image(uiImage: image)
                     .resizable()
