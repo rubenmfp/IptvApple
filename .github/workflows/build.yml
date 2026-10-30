@@ -1,5 +1,6 @@
 # Vérifie que l'appli se compile (iPhone et Apple TV), sans signature.
-# Utilise Xcode 15.2 quand il est disponible : c'est la version du Mac de l'utilisateur (macOS Ventura).
+# Machine macOS 15 (les machines macOS 14 de GitHub sont retirées le 2 novembre 2026) : Xcode 15.x s'il est présent,
+# sinon le plus récent des Xcode 16. Le projet reste au format d'Xcode 15 (il s'ouvre toujours sur le Mac de l'utilisateur).
 name: build
 
 on:
@@ -16,7 +17,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -25,7 +26,7 @@ jobs:
         run: |
           ls -d /Applications/Xcode*.app || true
           pick=""
-          for v in 15.2 15.1 15.0.1 15.0 15.3 15.4; do
+          for v in 15.2 15.1 15.0.1 15.0 15.3 15.4 16.4 16.3 16.2 16.1 16.0; do
             if [ -d "/Applications/Xcode_$v.app" ]; then pick="/Applications/Xcode_$v.app"; break; fi
           done
           if [ -n "$pick" ]; then sudo xcode-select -s "$pick"; fi
