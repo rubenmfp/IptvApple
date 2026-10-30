@@ -123,7 +123,10 @@ final class PlayerEngine: ObservableObject {
         let url = candidates[index]
         attempt = candidates.count > 1 ? "Essai \(index + 1) sur \(candidates.count) : .\(url.pathExtension.isEmpty ? "flux" : url.pathExtension)" : ""
         let m = VLCMedia(url: url)
-        m.addOptions(["network-caching": live ? 3000 : 2000, "http-reconnect": true])
+        var opts: [String: Any] = ["network-caching": live ? 3000 : 2000, "http-reconnect": true, "freetype-rel-fontsize": Prefs.subSize]
+        if !Prefs.subFont.isEmpty { opts["freetype-font"] = Prefs.subFont }
+        m.addOptions(opts)
+        setTextStyle()
         player.media = m
         started = false
         openedAt = Date()
@@ -161,7 +164,17 @@ final class PlayerEngine: ObservableObject {
                     startAtMs = 0
                 }
                 startedAt = Date()
-                if defaultAspect != .original { apply(defaultAspect) }
+                if let r = restore {
+                    // flux rouvert pour appliquer l'apparence des sous-titres : mêmes pistes, même format d'image
+                    restore = nil
+                    apply(r.aspect)
+                    player.currentAudioTrackIndex = r.audio
+                    player.currentVideoSubTitleIndex = r.subtitle
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                        self?.player.currentAudioTrackIndex = r.audio
+                        self?.player.currentVideoSubTitleIndex = r.subtitle
+                    }
+                } else if defaultAspect != .original { apply(defaultAspect) }
                 setPhase(.playing)
                 return
             }
@@ -251,6 +264,47 @@ final class PlayerEngine: ObservableObject {
     }
 
     func setRate(_ r: Float) { player.rate = r; rate = r }
+
+    // ---------- apparence des sous-titres ----------
+    struct SubSize: Hashable { let name: String; let value: Int }
+    static let subSizes = [SubSize(name: "Très petite", value: 26), SubSize(name: "Petite", value: 20), SubSize(name: "Moyenne", value: 16),
+                           SubSize(name: "Grande", value: 13), SubSize(name: "Très grande", value: 10)]
+    /// Polices proposées (celles présentes sur l'appareil), « Par défaut » = celle de VLC.
+    static let subFonts: [String] = {
+        let have = Set(UIFont.familyNames)
+        return ["Helvetica Neue", "Avenir Next", "Arial", "Verdana", "Trebuchet MS", "Gill Sans", "Futura", "Georgia",
+                "Arial Rounded MT Bold", "Courier New", "Marker Felt"].filter { have.contains($0) }
+    }()
+    static func subSizeName(_ v: Int) -> String {
+        subSizes.min { abs($0.value - v) < abs($1.value - v) }?.name ?? "Moyenne"
+    }
+
+    @Published private(set) var subSize = Prefs.subSize
+    @Published private(set) var subFont = Prefs.subFont
+
+    func setSubtitleSize(_ v: Int) { subSize = v; Prefs.subSize = v; restyle() }
+    func setSubtitleFont(_ f: String) { subFont = f; Prefs.subFont = f; restyle() }
+
+    private struct Restore { let audio: Int32; let subtitle: Int32; let aspect: Aspect }
+    private var restore: Restore?
+
+    /// Taille et police du texte, pour le moteur de rendu de VLC (lues à l'ouverture de l'image).
+    private func setTextStyle() {
+        let size = NSSelectorFromString("setTextRendererFontSize:")
+        if player.responds(to: size) { player.perform(size, with: NSNumber(value: Prefs.subSize)) }
+        let font = NSSelectorFromString("setTextRendererFont:")
+        if !Prefs.subFont.isEmpty, player.responds(to: font) { player.perform(font, with: Prefs.subFont) }
+    }
+
+    /// VLC n'applique l'apparence des sous-titres qu'à l'ouverture de l'image : on rouvre le flux à la même position,
+    /// avec les mêmes pistes audio et sous-titres et le même format.
+    private func restyle() {
+        setTextStyle()
+        guard started, index < candidates.count, suspendedAt == nil else { return }
+        restore = Restore(audio: player.currentAudioTrackIndex, subtitle: player.currentVideoSubTitleIndex, aspect: aspect)
+        suspend()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.resume() }
+    }
 
     // ---------- rendu sonore (égaliseur de VLC) ----------
     static let soundNames = ["Normal", "Basses renforcées", "Dialogues plus clairs", "Cinéma"]

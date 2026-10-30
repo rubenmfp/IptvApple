@@ -34,6 +34,7 @@ struct ItemSheet: View {
     @State private var creatingList = false
     @State private var newListName = ""
     @State private var listDialog = false
+    @State private var showPoster = false
     #if os(iOS)
     @State private var rateOpen = false
     #endif
@@ -70,6 +71,9 @@ struct ItemSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background { backdrop }
         .task(id: item.key) { await load() }
+        #if os(iOS)
+        .fullScreenCover(isPresented: $showPoster) { PosterViewer(url: item.poster, title: item.name) }
+        #endif
         .alert("Nouvelle liste", isPresented: $creatingList) {
             TextField("Nom de la liste", text: $newListName)
             Button("Créer") { model.createList(newListName, with: item); listTick += 1 }
@@ -177,6 +181,17 @@ struct ItemSheet: View {
                 .frame(width: Theme.tv ? 300 : 120, height: Theme.tv ? 450 : 180)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .shadow(radius: 10)
+                #if os(iOS)
+                // iPhone : un appui sur l'affiche l'ouvre en plein écran
+                .overlay(alignment: .bottomTrailing) {
+                    if item.poster != nil {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                            .padding(5).background(Circle().fill(.black.opacity(0.55))).padding(5)
+                    }
+                }
+                .onTapGesture { if item.poster != nil { showPoster = true } }
+                #endif
             VStack(alignment: .leading, spacing: Theme.tv ? 16 : 10) {
                 Text(item.name)
                     .font(Theme.tv ? .title2.weight(.bold) : .title3.weight(.bold))
@@ -721,3 +736,81 @@ struct NewTag: View {
             .foregroundStyle(.white)
     }
 }
+
+#if os(iOS)
+/// Affiche en plein écran (iPhone) : pincer ou toucher deux fois pour zoomer, glisser vers le bas ou ✕ pour fermer.
+struct PosterViewer: View {
+    let url: String?
+    let title: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var image: UIImage?
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+    @State private var drag: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(1 - min(0.6, abs(drag) / 600)).ignoresSafeArea()
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .scaleEffect(scale)
+                    .offset(x: offset.width, y: offset.height + drag)
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { v in scale = min(5, max(1, lastScale * v)) }
+                            .onEnded { _ in
+                                lastScale = scale
+                                if scale <= 1.01 { withAnimation(.spring()) { scale = 1; lastScale = 1; offset = .zero; lastOffset = .zero } }
+                            }
+                            .simultaneously(with: DragGesture()
+                                .onChanged { v in
+                                    if scale > 1 {
+                                        offset = CGSize(width: lastOffset.width + v.translation.width, height: lastOffset.height + v.translation.height)
+                                    } else {
+                                        drag = v.translation.height
+                                    }
+                                }
+                                .onEnded { v in
+                                    if scale > 1 { lastOffset = offset; return }
+                                    if abs(v.translation.height) > 140 { dismiss() } else { withAnimation(.spring()) { drag = 0 } }
+                                })
+                    )
+                    .onTapGesture(count: 2) {
+                        withAnimation(.spring()) {
+                            if scale > 1 { scale = 1; lastScale = 1; offset = .zero; lastOffset = .zero } else { scale = 2.5; lastScale = 2.5 }
+                        }
+                    }
+                    .ignoresSafeArea()
+            } else {
+                ProgressView().tint(.white)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .padding(16)
+            .opacity(drag == 0 ? 1 : 0)
+        }
+        .overlay(alignment: .bottom) {
+            Text(title).font(.footnote.weight(.semibold)).foregroundStyle(.white.opacity(0.8))
+                .padding(.bottom, 20).opacity(scale == 1 && drag == 0 ? 1 : 0)
+        }
+        .statusBarHidden(true)
+        .task {
+            guard let url else { return }
+            // l'affiche du catalogue d'abord (déjà en mémoire), puis une version plus fine
+            if let c = ImageStore.shared.cached(url, px: 400) { image = c }
+            if let big = await ImageStore.shared.load(url, px: 1600) { image = big }
+        }
+    }
+}
+#endif

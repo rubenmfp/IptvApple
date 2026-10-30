@@ -65,11 +65,13 @@ struct MainTabs: View {
         #if os(tvOS)
         // comme sur Android : profil en cours, heure et date, à droite de la barre des onglets (masqués quand on descend)
         .overlay(alignment: .topTrailing) {
+            // la pastille se sélectionne (à droite des onglets) : elle ouvre « Qui regarde ? »
             TopInfo()
                 .padding(.top, 2)
                 .opacity(chrome.atTop ? 1 : 0)
                 .animation(.easeInOut(duration: 0.25), value: chrome.atTop)
-                .allowsHitTesting(false)
+                .disabled(!chrome.atTop)
+                .focusSection()
         }
         #endif
         .alert("Nouvelle liste", isPresented: Binding(get: { model.newListFor != nil }, set: { if !$0 { model.newListFor = nil } })) {
@@ -127,7 +129,10 @@ struct TopInfo: View {
 
     var body: some View {
         HStack(spacing: Theme.tv ? 22 : 10) {
-            ProfileAvatar(profile: model.profile, size: Theme.tv ? 58 : 30, circle: true)
+            Button { model.pickingProfile = true } label: {
+                ProfileAvatar(profile: model.profile, size: Theme.tv ? 58 : 30, circle: true)
+            }
+            .buttonStyle(TopAvatarStyle(name: model.profile.name))
             SwiftUI.TimelineView(.everyMinute) { ctx in
                 VStack(alignment: .leading, spacing: 0) {
                     Text(Self.time.string(from: ctx.date))
@@ -141,5 +146,36 @@ struct TopInfo: View {
             }
         }
         .shadow(color: .black.opacity(0.6), radius: 6)
+    }
+}
+
+/// Pastille du profil en haut : à la sélection, elle grossit, s'entoure de blanc et affiche « Changer de profil ».
+private struct TopAvatarStyle: ButtonStyle {
+    let name: String
+    func makeBody(configuration: Configuration) -> some View { TopAvatarBody(configuration: configuration, name: name) }
+}
+
+private struct TopAvatarBody: View {
+    let configuration: ButtonStyleConfiguration
+    let name: String
+    @Environment(\.isFocused) private var focused
+    var body: some View {
+        configuration.label
+            .overlay(Circle().strokeBorder(.white, lineWidth: focused ? 4 : 0))
+            .scaleEffect(focused ? 1.2 : (configuration.isPressed ? 0.92 : 1))
+            .shadow(color: .black.opacity(focused ? 0.6 : 0), radius: 10, y: 4)
+            .overlay(alignment: .bottom) {
+                if focused {
+                    Text("\(name) · Changer de profil")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .fixedSize()
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(Capsule().fill(.black.opacity(0.75)))
+                        .offset(y: Theme.tv ? 52 : 26)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: focused)
     }
 }

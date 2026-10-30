@@ -41,12 +41,22 @@ enum PlayerFocus: Hashable { case surface, timeline, back, play, forward, audio,
 
 /// Panneaux d'options (Apple TV).
 enum OptionPanel: Equatable {
-    case audio, subtitles, speed, quality
+    case audio, subtitles, speed, quality, sound, subSize, subFont
     var title: String {
-        switch self { case .audio: return "Audio"; case .subtitles: return "Sous-titres"; case .speed: return "Vitesse"; case .quality: return "Qualité" }
+        switch self {
+        case .audio: return "Audio"; case .subtitles: return "Sous-titres"; case .speed: return "Vitesse"; case .quality: return "Qualité"
+        case .sound: return "Rendu sonore"; case .subSize: return "Taille des sous-titres"; case .subFont: return "Police des sous-titres"
+        }
+    }
+    /// Sous-menu : Retour ramène au menu d'où il s'ouvre.
+    var parent: OptionPanel? {
+        switch self { case .sound: return .audio; case .subSize, .subFont: return .subtitles; default: return nil }
     }
     var origin: PlayerFocus {
-        switch self { case .audio: return .audio; case .subtitles: return .subtitles; case .speed: return .speed; case .quality: return .quality }
+        switch self {
+        case .audio, .sound: return .audio; case .subtitles, .subSize, .subFont: return .subtitles
+        case .speed: return .speed; case .quality: return .quality
+        }
     }
 }
 
@@ -652,27 +662,43 @@ struct PlayerView: View {
 
     private func closePanel() {
         guard let p = panel else { return }
+        if let parent = p.parent { openPanel(parent); return }
         withAnimation(.easeIn(duration: 0.2)) { panel = nil }
         DispatchQueue.main.async { focus = p.origin }
         scheduleHide()
     }
 
-    private struct PanelItem { let title: String; let on: Bool; let action: () -> Void }
+    private struct PanelItem {
+        let title: String
+        let on: Bool
+        var opens: OptionPanel? = nil
+        var action: () -> Void = {}
+    }
 
     private func panelItems(_ p: OptionPanel) -> [PanelItem] {
         switch p {
         case .audio:
             var out = engine.audioTracks.map { t in PanelItem(title: t.name, on: t.id == engine.currentAudio) { engine.setAudio(t.id) } }
-            for (i, n) in PlayerEngine.soundNames.enumerated() {
-                out.append(PanelItem(title: "Son : " + n, on: engine.sound == i) { engine.setSound(i) })
-            }
+            let s = PlayerEngine.soundNames[min(max(engine.sound, 0), PlayerEngine.soundNames.count - 1)] + (engine.boost ? " · amplifié" : "")
+            out.append(PanelItem(title: "Rendu sonore : \(s)", on: false, opens: .sound))
+            return out
+        case .sound:
+            var out = PlayerEngine.soundNames.enumerated().map { i, n in PanelItem(title: n, on: engine.sound == i) { engine.setSound(i) } }
             let b = engine.boost
             out.append(PanelItem(title: "Volume amplifié", on: b) { engine.setBoost(!b) })
             return out
+        case .subSize:
+            return PlayerEngine.subSizes.map { sz in
+                PanelItem(title: sz.name, on: PlayerEngine.subSizeName(engine.subSize) == sz.name) { engine.setSubtitleSize(sz.value) }
+            }
+        case .subFont:
+            return [PanelItem(title: "Par défaut", on: engine.subFont.isEmpty) { engine.setSubtitleFont("") }]
+                + PlayerEngine.subFonts.map { f in PanelItem(title: f, on: engine.subFont == f) { engine.setSubtitleFont(f) } }
         case .subtitles:
             return engine.subtitleTracks.map { t in
                 PanelItem(title: t.id < 0 ? "Désactivés" : t.name, on: t.id == engine.currentSubtitle) { engine.setSubtitle(t.id) }
-            }
+            } + [PanelItem(title: "Taille : \(PlayerEngine.subSizeName(engine.subSize))", on: false, opens: .subSize),
+                 PanelItem(title: "Police : \(engine.subFont.isEmpty ? "par défaut" : engine.subFont)", on: false, opens: .subFont)]
         case .quality:
             guard let c = req.channel else { return [] }
             return c.variants.map { v in
@@ -701,10 +727,14 @@ struct PlayerView: View {
                 if items.isEmpty {
                     Text(p == .subtitles ? "Aucun sous-titre" : "Aucune piste").foregroundStyle(Theme.dim)
                 }
+                if p == .subSize || p == .subFont {
+                    Text("Le flux se rouvre un instant pour appliquer le changement.").font(.caption).foregroundStyle(Theme.dim)
+                }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(Array(items.enumerated()), id: \.offset) { i, it in
                             Button {
+                                if let next = it.opens { openPanel(next); return }
                                 it.action()
                                 closePanel()
                             } label: {
@@ -712,6 +742,7 @@ struct PlayerView: View {
                                     Image(systemName: "checkmark").opacity(it.on ? 1 : 0)
                                     Text(it.title).lineLimit(1)
                                     Spacer(minLength: 0)
+                                    if it.opens != nil { Image(systemName: "chevron.right").opacity(0.7) }
                                 }
                                 .frame(width: 520, alignment: .leading)
                             }
@@ -973,11 +1004,15 @@ struct OptionsMenus: View {
             ForEach(tracks, id: \.self) { t in
                 Button { engine.setAudio(t.id); onPick() } label: { check(t.name, on: t.id == engine.currentAudio) }
             }
-            Section("Rendu sonore") {
+            Menu {
                 ForEach(Array(PlayerEngine.soundNames.enumerated()), id: \.offset) { i, n in
                     Button { engine.setSound(i); onPick() } label: { check(n, on: engine.sound == i) }
                 }
+                Divider()
                 Button { engine.setBoost(!engine.boost); onPick() } label: { check("Volume amplifié", on: engine.boost) }
+            } label: {
+                Label("Rendu sonore : " + PlayerEngine.soundNames[min(max(engine.sound, 0), PlayerEngine.soundNames.count - 1)]
+                      + (engine.boost ? " · amplifié" : ""), systemImage: "slider.vertical.3")
             }
         } label: { icon("speaker.wave.2", "Audio") }
         .focused(focus, equals: .audio)
@@ -988,6 +1023,24 @@ struct OptionsMenus: View {
                 Button { engine.setSubtitle(t.id); onPick() } label: { check(t.id < 0 ? "Désactivés" : t.name, on: t.id == engine.currentSubtitle) }
             }
             if engine.subtitleTracks.isEmpty { Text("Aucun sous-titre") }
+            Divider()
+            Menu {
+                Section("Taille") {
+                    ForEach(PlayerEngine.subSizes, id: \.value) { sz in
+                        Button { engine.setSubtitleSize(sz.value); onPick() } label: {
+                            check(sz.name, on: PlayerEngine.subSizeName(engine.subSize) == sz.name)
+                        }
+                    }
+                }
+                Section("Police") {
+                    Button { engine.setSubtitleFont(""); onPick() } label: { check("Par défaut", on: engine.subFont.isEmpty) }
+                    ForEach(PlayerEngine.subFonts, id: \.self) { f in
+                        Button { engine.setSubtitleFont(f); onPick() } label: { check(f, on: engine.subFont == f) }
+                    }
+                }
+            } label: {
+                Label("Police et taille", systemImage: "textformat.size")
+            }
         } label: { icon("captions.bubble", "Sous-titres") }
         .focused(focus, equals: .subtitles)
         .simultaneousGesture(TapGesture().onEnded { onOpen() })

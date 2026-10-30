@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Security
 
 /// Identifiants Xtream dans le trousseau de l'appareil (jamais dans un fichier ni dans le code).
@@ -107,6 +108,17 @@ enum Prefs {
         get { Store.defaults.bool(forKey: "fxb") }
         set { Store.defaults.set(newValue, forKey: "fxb") }
     }
+    /// Sous-titres (propres au profil) : taille relative de VLC (hauteur de l'image / valeur : plus grand = plus petit texte)
+    /// et police (vide = celle de VLC).
+    static var subSize: Int {
+        get { let v = Store.defaults.integer(forKey: "subsize"); return v > 0 ? v : (UIDevice.current.userInterfaceIdiom == .tv ? 16 : 20) }
+        set { Store.defaults.set(newValue, forKey: "subsize") }
+    }
+    static var subFont: String {
+        get { Store.defaults.string(forKey: "subfont") ?? "" }
+        set { Store.defaults.set(newValue, forKey: "subfont") }
+    }
+
     /// Diagnostic du lecteur (en bas des réglages) : dernière lecture réussie, dernière erreur.
     static var playerNote: String {
         get { UserDefaults.standard.string(forKey: "pnote") ?? "" }
