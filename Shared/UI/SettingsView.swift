@@ -5,6 +5,9 @@ struct SettingsView: View {
     @State private var refreshDays = Prefs.refreshDays
     @State private var confirmLogout = false
     @State private var epgTick = 0
+    // réglages à interrupteur : copie locale (sinon l'écran ne se redessine pas et l'interrupteur revient en arrière)
+    @State private var epgAuto = Prefs.epgAuto
+    @State private var fastResume = Prefs.fastResume
     @State private var tmdbKey = Store.tmdbKey
     @State private var tmdbTest = ""
     @ObservedObject private var sync = LanSync.shared
@@ -100,7 +103,8 @@ struct SettingsView: View {
                         .font(.footnote).foregroundStyle(Theme.dim)
                 }
                 Section("Guide des programmes") {
-                    Toggle("Charger à l'ouverture du Direct", isOn: Binding(get: { Prefs.epgAuto }, set: { Prefs.epgAuto = $0; epgTick += 1 }))
+                    Toggle("Charger à l'ouverture du Direct", isOn: $epgAuto)
+                        .onChange(of: epgAuto) { _, v in Prefs.epgAuto = v }
                     TextField("Adresse XMLTV (vide = celle du fournisseur)", text: Binding(get: { Prefs.epgUrl }, set: { Prefs.epgUrl = $0; epgTick += 1 }))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -173,7 +177,8 @@ struct SettingsView: View {
                         .font(.footnote).foregroundStyle(Theme.dim)
                 }
                 Section("Lecteur") {
-                    Toggle("Reprise rapide après une pause (essai)", isOn: Binding(get: { Prefs.fastResume }, set: { Prefs.fastResume = $0; epgTick += 1 }))
+                    Toggle("Reprise rapide après une pause (essai)", isOn: $fastResume)
+                        .onChange(of: fastResume) { _, v in Prefs.fastResume = v }
                     Text("Raccourcit le blanc de son à la reprise. S'applique à la prochaine lecture. "
                          + "À désactiver si l'image saccade ou si le son se décale.")
                         .font(.footnote).foregroundStyle(Theme.dim)
@@ -186,7 +191,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.19 : synchronisation par GitHub.").foregroundStyle(Theme.dim)
+                    Text("Version 0.20 : pastille alignée sur les onglets, réglages corrigés.").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")
