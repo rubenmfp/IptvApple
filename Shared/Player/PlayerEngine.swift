@@ -125,6 +125,13 @@ final class PlayerEngine: ObservableObject {
         let m = VLCMedia(url: url)
         var opts: [String: Any] = ["network-caching": live ? 3000 : 2000, "http-reconnect": true, "freetype-rel-fontsize": Prefs.subSize]
         if !Prefs.subFont.isEmpty { opts["freetype-font"] = Prefs.subFont }
+        if Prefs.fastResume {
+            // reprise rapide (essai) : VLC ne compense plus les irrégularités d'horloge du flux, il se recale aussitôt
+            // après une pause au lieu d'attendre ; films : tampon réseau un peu plus court
+            opts["clock-jitter"] = 0
+            opts["clock-synchro"] = 0
+            if !live { opts["network-caching"] = 1500 }
+        }
         m.addOptions(opts)
         setTextStyle()
         player.media = m

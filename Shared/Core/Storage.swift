@@ -119,6 +119,12 @@ enum Prefs {
         set { Store.defaults.set(newValue, forKey: "subfont") }
     }
 
+    /// Essai : reprise plus rapide après une pause (horloge de VLC sans compensation de gigue, tampon audio court).
+    static var fastResume: Bool {
+        get { UserDefaults.standard.object(forKey: "fastResume") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "fastResume") }
+    }
+
     /// Diagnostic du lecteur (en bas des réglages) : dernière lecture réussie, dernière erreur.
     static var playerNote: String {
         get { UserDefaults.standard.string(forKey: "pnote") ?? "" }

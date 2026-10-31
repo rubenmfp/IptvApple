@@ -429,10 +429,11 @@ struct PlayerView: View {
     // MARK: - Actions
 
     private func start() {
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-        try? AVAudioSession.sharedInstance().setActive(true)
-        #endif
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .moviePlayback)
+        // reprise rapide (essai) : tampon audio du système court, la sortie son redémarre plus vite après une pause
+        if Prefs.fastResume { try? session.setPreferredIOBufferDuration(0.005) }
+        try? session.setActive(true)
         UIApplication.shared.isIdleTimerDisabled = true
         #if os(iOS)
         applyRotation()

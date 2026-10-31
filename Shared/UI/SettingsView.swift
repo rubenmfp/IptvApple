@@ -136,6 +136,12 @@ struct SettingsView: View {
                     Text("Lit la fiche de chaque film, une à la fois (long : plusieurs dizaines de minutes). Les séries sont déjà indexées.")
                         .font(.footnote).foregroundStyle(Theme.dim)
                 }
+                Section("Lecteur") {
+                    Toggle("Reprise rapide après une pause (essai)", isOn: Binding(get: { Prefs.fastResume }, set: { Prefs.fastResume = $0; epgTick += 1 }))
+                    Text("Raccourcit le blanc de son à la reprise. S'applique à la prochaine lecture. "
+                         + "À désactiver si l'image saccade ou si le son se décale.")
+                        .font(.footnote).foregroundStyle(Theme.dim)
+                }
                 Section("Diagnostic du lecteur") {
                     Text("Dernière lecture : " + (Prefs.playerNote.isEmpty ? "aucune" : Prefs.playerNote))
                     Text("Dernière erreur : " + (Prefs.playerErr.isEmpty ? "aucune" : Prefs.playerErr)).foregroundStyle(Theme.dim)
@@ -144,7 +150,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.17 : avance rapide progressive, déplacement sur la barre de lecture.").foregroundStyle(Theme.dim)
+                    Text("Version 0.18 : reprise rapide après une pause (essai).").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")
