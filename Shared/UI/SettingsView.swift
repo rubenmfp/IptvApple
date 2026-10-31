@@ -184,14 +184,15 @@ struct SettingsView: View {
                         .font(.footnote).foregroundStyle(Theme.dim)
                 }
                 Section("Diagnostic du lecteur") {
-                    Text("Dernière lecture : " + (Prefs.playerNote.isEmpty ? "aucune" : Prefs.playerNote))
-                    Text("Dernière erreur : " + (Prefs.playerErr.isEmpty ? "aucune" : Prefs.playerErr)).foregroundStyle(Theme.dim)
+                    // Apple TV : lignes sélectionnables, sinon la liste ne descend pas jusqu'ici
+                    InfoRow { Text("Dernière lecture : " + (Prefs.playerNote.isEmpty ? "aucune" : Prefs.playerNote)) }
+                    InfoRow { Text("Dernière erreur : " + (Prefs.playerErr.isEmpty ? "aucune" : Prefs.playerErr)).foregroundStyle(Theme.dim) }
                     Text("Lecteur VLC. L'appli essaie plusieurs adresses (extension annoncée, .mkv, .mp4, .ts…) et retient celle qui marche.")
                         .font(.footnote).foregroundStyle(Theme.dim)
                 }
                 Section("À propos") {
-                    Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.20 : pastille alignée sur les onglets, réglages corrigés.").foregroundStyle(Theme.dim)
+                    InfoRow { Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)") }
+                    Text("Version 0.21 : réglages accessibles jusqu’en bas sur Apple TV.").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")
@@ -341,5 +342,17 @@ struct CategoryToggleList: View {
     private func set(_ k: String, _ h: Bool) {
         if h { hidden.insert(k) } else { hidden.remove(k) }
         model.setHidden(hidden)
+    }
+}
+
+/// Ligne d'information. Apple TV : sélectionnable (sans action), pour que la liste puisse défiler jusqu'à elle.
+struct InfoRow<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    var body: some View {
+        #if os(tvOS)
+        Button {} label: { content().frame(maxWidth: .infinity, alignment: .leading) }
+        #else
+        content()
+        #endif
     }
 }
