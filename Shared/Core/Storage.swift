@@ -119,6 +119,12 @@ enum Prefs {
         set { Store.defaults.set(newValue, forKey: "subfont") }
     }
 
+    /// Synchronisation par GitHub : dépôt privé « pseudo/depot » (le jeton est dans le trousseau).
+    static var ghRepo: String {
+        get { UserDefaults.standard.string(forKey: "ghRepo") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "ghRepo") }
+    }
+
     /// Essai : reprise plus rapide après une pause (horloge de VLC sans compensation de gigue, tampon audio court).
     static var fastResume: Bool {
         get { UserDefaults.standard.object(forKey: "fastResume") as? Bool ?? true }

@@ -56,3 +56,34 @@ Une suppression est datée comme une modification (on garde la date même quand 
    inconnu ou supprimé sont ignorées.
 5. **Profil en cours** : propre à chaque appareil, jamais transmis.
 6. Non synchronisés : réglages du lecteur (rendu sonore, format d'image, rotation), guide, synchronisation elle-même.
+
+## Synchronisation par GitHub (en plus du Wi-Fi)
+Pour synchroniser même loin de la maison, sans que les appareils soient allumés en même temps. Facultative : rien ne se
+passe tant que l'utilisateur n'a pas saisi de dépôt et de jeton.
+
+- **Où** : un dépôt GitHub **privé** de l'utilisateur, fichier `iptvtv/<acct>.json` (`acct` = empreinte du compte
+  Xtream, comme en Wi-Fi). Deux comptes Xtream différents n'utilisent donc jamais le même fichier.
+- **Accès** : jeton « fine-grained » limité à ce dépôt, permission *Contents : Read and write*. Saisi sur chaque
+  appareil, gardé dans son stockage sécurisé (trousseau / Android Keystore), **jamais transmis** (ni en Wi-Fi, ni dans le fichier).
+- **Contenu du fichier** :
+  `{"v":1,"acct":"…","dev":"Apple TV","updated":date_ms,"recs":[[clé, date_ms, valeur|null], …]}`
+  avec exactement les mêmes enregistrements que le message Wi-Fi (profil principal sans préfixe, `prof|<id>`,
+  `@<id>:…`), **sauf `tmdb`** (jamais envoyée sur GitHub, ignorée si présente).
+- **API** (`https://api.github.com`, en-têtes `Authorization: Bearer <jeton>`, `Accept: application/vnd.github+json`,
+  `X-GitHub-Api-Version: 2022-11-28`, un `User-Agent`) :
+  - lire : `GET /repos/<dépôt>/contents/iptvtv/<acct>.json` → `content` (base64, avec retours à la ligne) et `sha`.
+    Si `content` est vide alors que `size` > 0 (fichier de plus de 1 Mo) : même requête avec
+    `Accept: application/vnd.github.raw`. 404 : fichier pas encore créé (vérifier `GET /repos/<dépôt>` : 200 = dépôt
+    accessible, sinon dépôt introuvable ou jeton sans accès).
+  - écrire : `PUT` sur la même adresse, corps `{"message":"Synchro …","content":"<base64>","sha":"<sha lu>"}` (sans `sha`
+    à la création). 409 ou 422 = un autre appareil a écrit entre-temps : tout recommencer depuis la lecture (3 essais).
+- **Une synchronisation** :
+  1. lire le fichier ;
+  2. appliquer ses enregistrements chez soi avec la règle habituelle (comme un message Wi-Fi reçu) ;
+  3. fusionner fichier et données locales : pour chaque clé, la date la plus récente ; à date égale, une valeur
+     l'emporte sur `null` ; garder les clés inconnues telles quelles ; retirer les clés `@<id>:` d'un profil dont
+     `prof|<id>` vaut `null` ; trier par clé ;
+  4. si la fusion diffère du contenu lu : l'écrire (avec le `sha` lu).
+- **Quand** : à l'ouverture de l'appli (après 2 s), toutes les 5 minutes tant qu'elle est ouverte, 1 minute après une
+  modification (regroupé), et au passage en arrière-plan s'il reste des modifications non envoyées ; bouton
+  « Synchroniser maintenant ». Chaque écriture est un commit du dépôt (historique consultable).

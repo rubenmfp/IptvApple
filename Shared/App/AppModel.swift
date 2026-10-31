@@ -616,6 +616,10 @@ final class AppModel: ObservableObject {
         let s = LanSync.shared
         s.onApplied = { [weak self] in self?.syncApplied() }
         if active, Prefs.syncOn, phase == .ready, let a = account { s.start(account: a) } else { s.stop() }
+        // par GitHub : au premier plan ; en partant en arrière-plan, les dernières modifications sont envoyées
+        let c = CloudSync.shared
+        c.onApplied = { [weak self] in self?.syncApplied() }
+        if active, phase == .ready, let a = account { c.start(account: a) } else { c.stop(flush: phase == .ready) }
     }
 
     /// Données reçues d'un autre appareil : l'appli relit tout ce qui est partagé.
@@ -855,6 +859,7 @@ final class AppModel: ObservableObject {
 
     func logout() {
         LanSync.shared.stop()
+        CloudSync.shared.stop(flush: false)
         Keychain.delete()
         Profiles.removeAll()
         profiles = Profiles.all

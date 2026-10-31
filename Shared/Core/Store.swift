@@ -560,6 +560,43 @@ extension Store {
     }
 }
 
+// ======================= Échange des données (Wi-Fi et GitHub) =======================
+
+extension Store {
+    /// Enregistrements au format JSON commun : [[clé, date_ms, valeur|null], …].
+    static func recordsJSON(_ recs: [SyncRec]) -> [[Any]] {
+        recs.map { [$0.k, NSNumber(value: $0.t), $0.v ?? NSNull()] }
+    }
+
+    static func parseRecords(_ any: Any?) -> [SyncRec] {
+        (any as? [[Any]] ?? []).compactMap { r in
+            guard r.count >= 3, let k = r[0] as? String, !k.isEmpty else { return nil }
+            let t = (r[1] as? NSNumber)?.int64Value ?? Int64(r[1] as? String ?? "") ?? 0
+            let v: String? = r[2] is NSNull ? nil : (r[2] as? String ?? (r[2] as? NSNumber)?.stringValue)
+            return SyncRec(k: k, t: t, v: v)
+        }
+    }
+
+    /// Fusion de deux jeux de données (fichier GitHub et appareil) : pour chaque clé, la date la plus récente ;
+    /// à date égale, une valeur l'emporte sur une suppression. Les clés inconnues sont gardées telles quelles ;
+    /// les données d'un profil supprimé (« prof|id » = null) sont retirées. Résultat trié par clé.
+    static func mergeRecords(_ a: [SyncRec], _ b: [SyncRec]) -> [SyncRec] {
+        var m: [String: SyncRec] = [:]
+        for r in a + b {
+            if let c = m[r.k] {
+                if r.t > c.t || (r.t == c.t && c.v == nil && r.v != nil) { m[r.k] = r }
+            } else {
+                m[r.k] = r
+            }
+        }
+        let gone = Set(m.values.filter { $0.k.hasPrefix("prof|") && $0.v == nil }.map { String($0.k.dropFirst(5)) })
+        return m.values.filter { r in
+            guard r.k.hasPrefix("@"), let c = r.k.firstIndex(of: ":") else { return true }
+            return !gone.contains(String(r.k[r.k.index(after: r.k.startIndex)..<c]))
+        }.sorted { $0.k < $1.k }
+    }
+}
+
 /// Petits secrets saisis sur l'appareil (clé TMDB), gardés dans le trousseau, avec une copie en mémoire
 /// (la clé est consultée pour chaque affiche).
 enum Secret {

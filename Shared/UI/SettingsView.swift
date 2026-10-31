@@ -8,6 +8,11 @@ struct SettingsView: View {
     @State private var tmdbKey = Store.tmdbKey
     @State private var tmdbTest = ""
     @ObservedObject private var sync = LanSync.shared
+    @ObservedObject private var cloud = CloudSync.shared
+    @State private var ghRepo = Prefs.ghRepo
+    @State private var ghToken = ""
+    @State private var ghTest = ""
+    @State private var ghTick = 0
     @State private var syncOn = Prefs.syncOn
     @State private var syncPeer = Prefs.syncPeer
 
@@ -102,6 +107,37 @@ struct SettingsView: View {
                     Button("Charger le guide maintenant") { model.loadEpg() }
                     if !model.epgStatus.isEmpty { Text(model.epgStatus).foregroundStyle(Theme.dim) }
                 }
+                Section("Synchronisation par GitHub") {
+                    let _ = ghTick
+                    TextField("Dépôt privé (ex. pseudo/iptv-synchro)", text: $ghRepo)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    SecureField(CloudSync.token.isEmpty ? "Jeton GitHub (github_pat_…)" : "Jeton enregistré ✓ (en saisir un autre pour le remplacer)",
+                                text: $ghToken)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    HStack(spacing: 20) {
+                        Button(cloud.busy ? "Synchronisation…" : "Enregistrer et synchroniser") {
+                            CloudSync.shared.configure(repo: ghRepo, token: ghToken)
+                            ghToken = ""
+                            ghTick += 1
+                            Task { ghTest = await CloudSync.shared.test() }
+                        }
+                        .disabled(cloud.busy)
+                        if !CloudSync.token.isEmpty {
+                            Button("Effacer le jeton", role: .destructive) { CloudSync.shared.forget(); ghTest = ""; ghTick += 1 }
+                        }
+                    }
+                    if !ghTest.isEmpty { Text(ghTest).font(.footnote).foregroundStyle(Theme.dim) }
+                    else if !cloud.info.isEmpty { Text(cloud.info).font(.footnote).foregroundStyle(Theme.dim) }
+                    Text("Pour retrouver reprises, vus, favoris, listes, notes, séries suivies et profils partout, même loin de la maison "
+                         + "(la TV Android aussi, quand elle le gérera). Une fois : sur github.com, créez un dépôt PRIVÉ vide ; puis "
+                         + "Settings > Developer settings > Fine-grained tokens > Generate new token, « Only select repositories » = ce dépôt, "
+                         + "permission « Contents : Read and write ». Saisissez « pseudo/dépôt » et le jeton sur chaque appareil "
+                         + "(sur l'Apple TV, le clavier de l'iPhone permet de coller le jeton). Le jeton reste dans le trousseau ; "
+                         + "ni vos identifiants Xtream ni la clé TMDB ne sont envoyés.")
+                        .font(.footnote).foregroundStyle(Theme.dim)
+                }
                 Section("Synchronisation par le Wi-Fi") {
                     Toggle("Synchroniser avec mes autres appareils", isOn: $syncOn)
                         .onChange(of: syncOn) { _, v in Prefs.syncOn = v; model.updateSync(active: true) }
@@ -150,7 +186,7 @@ struct SettingsView: View {
                 }
                 Section("À propos") {
                     Text("IptvTV pour \(Theme.tv ? "Apple TV" : "iPhone et iPad") · version \(version)")
-                    Text("Version 0.18 : reprise rapide après une pause (essai).").foregroundStyle(Theme.dim)
+                    Text("Version 0.19 : synchronisation par GitHub.").foregroundStyle(Theme.dim)
                 }
             }
             .navigationTitle("Réglages")

@@ -102,20 +102,13 @@ final class LanSync: ObservableObject {
     // MARK: - Messages
 
     private func message() -> String {
-        let recs: [[Any]] = Store.syncRecords().map { [$0.k, NSNumber(value: $0.t), $0.v ?? NSNull()] }
+        let recs = Store.recordsJSON(Store.syncRecords())
         let o: [String: Any] = ["v": 1, "acct": acct, "dev": deviceName, "recs": recs]
         guard let d = try? JSONSerialization.data(withJSONObject: o), let s = String(data: d, encoding: .utf8) else { return "{}" }
         return s
     }
 
-    private static func records(_ o: [String: Any]) -> [SyncRec] {
-        (o["recs"] as? [[Any]] ?? []).compactMap { r in
-            guard r.count >= 3, let k = r[0] as? String else { return nil }
-            let t = (r[1] as? NSNumber)?.int64Value ?? Int64(r[1] as? String ?? "") ?? 0
-            let v: String? = r[2] is NSNull ? nil : (r[2] as? String ?? (r[2] as? NSNumber)?.stringValue)
-            return SyncRec(k: k, t: t, v: v)
-        }
-    }
+    private static func records(_ o: [String: Any]) -> [SyncRec] { Store.parseRecords(o["recs"]) }
 
     private func receive(_ o: [String: Any]) -> Int {
         applying = true

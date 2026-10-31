@@ -225,6 +225,18 @@ check(Store.hiddenCats, ["vod|Adultes", "live|Radio/Musique"], "catégories masq
 check(Store.follows["series:4"]?.vid, 4, "série suivie reçue")
 check(Store.applySync(Store.syncRecords()), 0, "renvoyer ses propres données ne change rien")
 
+// ---------- fusion (fichier GitHub) ----------
+let mA = [SyncRec(k: "fav|vod:1", t: 10, v: "1"), SyncRec(k: "pos|vod:2", t: 20, v: "5;10"), SyncRec(k: "futur|x", t: 5, v: "a"),
+          SyncRec(k: "prof|ab", t: 30, v: nil), SyncRec(k: "@ab:fav|vod:3", t: 12, v: "1")]
+let mB = [SyncRec(k: "fav|vod:1", t: 15, v: nil), SyncRec(k: "pos|vod:2", t: 20, v: nil), SyncRec(k: "seen|ep:4", t: 1, v: "1"),
+          SyncRec(k: "@cd:fav|vod:9", t: 3, v: "1")]
+let mAB = Store.mergeRecords(mA, mB)
+check(mAB.map(\.k), ["@cd:fav|vod:9", "fav|vod:1", "futur|x", "pos|vod:2", "prof|ab", "seen|ep:4"], "fusion : clés (profil supprimé retiré, clé inconnue gardée)")
+check(mAB.first { $0.k == "fav|vod:1" }?.t, 15, "fusion : la plus récente l'emporte")
+check(mAB.first { $0.k == "pos|vod:2" }?.v, "5;10", "fusion : à date égale, la valeur l'emporte sur la suppression")
+check(Store.mergeRecords(mAB, mAB), mAB, "fusion stable")
+check(Store.parseRecords(Store.recordsJSON(mAB)), mAB, "format JSON des enregistrements")
+
 // ---------- profils ----------
 let kid = Profiles.add(name: "Enfants", color: 3)!
 Profiles.select(kid.id)
