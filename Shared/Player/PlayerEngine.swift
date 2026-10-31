@@ -147,7 +147,7 @@ final class PlayerEngine: ObservableObject {
         guard index < candidates.count else { return }
         let st = player.state
         let t = Int(player.time.intValue)
-        if started || t > 0 { clock.set(time: max(0, t)) }
+        if (started || t > 0) && pendingSeek == nil && Date() > holdClockUntil { clock.set(time: max(0, t)) }
         if let len = player.media?.length.intValue, len > 0 { clock.set(duration: Int(len)) }
 
         if !started {
@@ -241,6 +241,10 @@ final class PlayerEngine: ObservableObject {
 
     // ---------- commandes ----------
     /// Pause / lecture d'après l'état affiché (pendant une mise en mémoire tampon, VLC ne se dit pas « en lecture »).
+    var isPaused: Bool { phase == .paused }
+    func pause() { if phase != .paused { player.pause(); setPhase(.paused) } }
+    func play() { if phase == .paused { player.play(); setPhase(.playing) } }
+
     func togglePause() {
         if phase == .paused { player.play(); setPhase(.playing) } else { player.pause(); setPhase(.paused) }
     }
@@ -248,19 +252,46 @@ final class PlayerEngine: ObservableObject {
     /// Format appliqué au démarrage de chaque lecture.
     var defaultAspect: Aspect = .original
 
+    /// Saut relatif. Plusieurs appuis rapides s'additionnent : la barre suit tout de suite, et VLC ne cherche qu'une fois,
+    /// peu après le dernier appui (pas de coupures à chaque appui).
     func seek(by seconds: Int) {
         guard !live, durationMs > 0 else { return }
-        let target = min(max(0, timeMs + seconds * 1000), max(0, durationMs - 2000))
-        player.time = VLCTime(int: Int32(clamping: target))
+        let base = pendingSeek ?? timeMs
+        let target = min(max(0, base + seconds * 1000), max(0, durationMs - 2000))
+        pendingSeek = target
         clock.set(time: target)
-        if seconds < 0 { showSubtitlesBriefly() }
+        seekWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in self?.commitSeek() }
+        seekWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: w)
     }
 
     func seek(toFraction f: Double) {
         guard !live, durationMs > 0 else { return }
-        let target = Int(Double(durationMs) * min(max(f, 0), 0.995))
-        player.time = VLCTime(int: Int32(clamping: target))
-        clock.set(time: target)
+        seek(toMs: Int(Double(durationMs) * min(max(f, 0), 0.995)))
+    }
+
+    /// Position précise (barre de lecture).
+    func seek(toMs ms: Int) {
+        guard !live, durationMs > 0 else { return }
+        pendingSeek = min(max(0, ms), max(0, durationMs - 2000))
+        seekWork?.cancel()
+        commitSeek()
+    }
+
+    private var pendingSeek: Int?
+    private var seekWork: DispatchWorkItem?
+    /// Juste après un saut, VLC donne encore un moment l'ancienne position : la barre ne la reprend pas.
+    private var holdClockUntil = Date.distantPast
+
+    private func commitSeek() {
+        guard let t = pendingSeek else { return }
+        let back = t < Int(player.time.intValue)
+        player.time = VLCTime(int: Int32(clamping: t))
+        clock.set(time: t)
+        pendingSeek = nil
+        holdClockUntil = Date().addingTimeInterval(0.8)
+        if back { showSubtitlesBriefly() }
     }
 
     func setRate(_ r: Float) { player.rate = r; rate = r }

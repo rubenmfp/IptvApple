@@ -32,12 +32,12 @@ Non repris : image dans l'image sur iPhone (le lecteur VLC ne le permet pas simp
 - `Frameworks/` : VLCKit 3.7 (MobileVLCKit, TVVLCKit), téléchargé par `tools/fetch_vlckit.sh`.
 - `IptvApple.xcodeproj` : projet Xcode, généré par `python3 tools/gen_project.py` (à relancer après un ajout de fichier).
 - Cibles : `IptvApple` (iPhone, iPad) et `IptvAppleTV` (Apple TV). Minimum iOS 17 / tvOS 17.
-- Compatible avec Xcode 15.2 (Mac sous macOS Ventura). Le workflow GitHub vérifie la compilation à chaque envoi.
+- Le projet s'ouvre avec Xcode 15.2 (Mac sous macOS Ventura) ; GitHub compile avec Xcode 16.4 (macOS 14 retiré en novembre 2026).
 
 ## Installation (compte Apple gratuit)
 Le Mac de l'utilisateur (MacBook Pro 2017, macOS Ventura, Xcode 15.2 au maximum) ne peut pas installer directement sur
 iOS 27 / tvOS 27 (« developer disk image could not be mounted »). On passe donc par **Sideloadly** :
-1. GitHub fabrique l'appli à chaque envoi (Xcode 15.2) et publie `IptvTV-iPhone-x.y.ipa` et `IptvTV-AppleTV-x.y.ipa`
+1. GitHub fabrique l'appli à chaque envoi (macOS 15, Xcode 16.4 ; projet au format Xcode 15) et publie `IptvTV-iPhone-x.y.ipa` et `IptvTV-AppleTV-x.y.ipa`
    dans *Releases* (« Dernière version »).
 2. Sur le Mac : Sideloadly, appareil choisi dans « iDevice », fichier glissé sur l'icône IPA, identifiant Apple, Start.
    Apple TV : même Wi-Fi, écran Réglages > Télécommandes et appareils > App et appareils distants ouvert.

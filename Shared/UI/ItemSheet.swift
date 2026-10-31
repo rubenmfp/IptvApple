@@ -183,13 +183,6 @@ struct ItemSheet: View {
                 .shadow(radius: 10)
                 #if os(iOS)
                 // iPhone : un appui sur l'affiche l'ouvre en plein écran
-                .overlay(alignment: .bottomTrailing) {
-                    if item.poster != nil {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
-                            .padding(5).background(Circle().fill(.black.opacity(0.55))).padding(5)
-                    }
-                }
                 .onTapGesture { if item.poster != nil { showPoster = true } }
                 #endif
             VStack(alignment: .leading, spacing: Theme.tv ? 16 : 10) {

@@ -63,15 +63,22 @@ struct MainTabs: View {
         .environment(\.chrome, chrome)
         .onChange(of: tab) { _, _ in chrome.atTop = true }
         #if os(tvOS)
-        // comme sur Android : profil en cours, heure et date, à droite de la barre des onglets (masqués quand on descend)
-        .overlay(alignment: .topTrailing) {
-            // la pastille se sélectionne (à droite des onglets) : elle ouvre « Qui regarde ? »
-            TopInfo()
-                .padding(.top, 2)
+        // comme sur Android : pastille du profil à gauche de la loupe (elle se sélectionne et ouvre « Qui regarde ? »),
+        // heure et date à droite ; masquées quand on descend dans la page
+        .overlay(alignment: .topLeading) {
+            TopAvatar()
+                .padding(.top, 8)
                 .opacity(chrome.atTop ? 1 : 0)
                 .animation(.easeInOut(duration: 0.25), value: chrome.atTop)
                 .disabled(!chrome.atTop)
                 .focusSection()
+        }
+        .overlay(alignment: .topTrailing) {
+            TopClock()
+                .padding(.top, 2)
+                .opacity(chrome.atTop ? 1 : 0)
+                .animation(.easeInOut(duration: 0.25), value: chrome.atTop)
+                .allowsHitTesting(false)
         }
         #endif
         .alert("Nouvelle liste", isPresented: Binding(get: { model.newListFor != nil }, set: { if !$0 { model.newListFor = nil } })) {
@@ -116,9 +123,20 @@ extension EnvironmentValues {
     }
 }
 
-/// Profil en cours (pastille ronde), heure en couleur d'accent et date en dessous.
-struct TopInfo: View {
+/// Pastille du profil en cours : sélectionnable, elle ouvre « Qui regarde ? ».
+struct TopAvatar: View {
     @EnvironmentObject var model: AppModel
+    var body: some View {
+        Button { model.pickingProfile = true } label: {
+            ProfileAvatar(profile: model.profile, size: Theme.tv ? 58 : 30, circle: true)
+        }
+        .buttonStyle(TopAvatarStyle(name: model.profile.name))
+        .shadow(color: .black.opacity(0.6), radius: 6)
+    }
+}
+
+/// Heure en couleur d'accent et date en dessous.
+struct TopClock: View {
     private static let time: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm"; return f }()
     private static let date: DateFormatter = {
         let f = DateFormatter()
@@ -128,21 +146,15 @@ struct TopInfo: View {
     }()
 
     var body: some View {
-        HStack(spacing: Theme.tv ? 22 : 10) {
-            Button { model.pickingProfile = true } label: {
-                ProfileAvatar(profile: model.profile, size: Theme.tv ? 58 : 30, circle: true)
-            }
-            .buttonStyle(TopAvatarStyle(name: model.profile.name))
-            SwiftUI.TimelineView(.everyMinute) { ctx in
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(Self.time.string(from: ctx.date))
-                        .font(.system(size: Theme.tv ? 38 : 18, weight: .bold))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.accent)
-                    Text(Self.date.string(from: ctx.date))
-                        .font(.system(size: Theme.tv ? 20 : 11, weight: .medium))
-                        .foregroundStyle(Theme.dim)
-                }
+        SwiftUI.TimelineView(.everyMinute) { ctx in
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(Self.time.string(from: ctx.date))
+                    .font(.system(size: Theme.tv ? 38 : 18, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.accent)
+                Text(Self.date.string(from: ctx.date))
+                    .font(.system(size: Theme.tv ? 20 : 11, weight: .medium))
+                    .foregroundStyle(Theme.dim)
             }
         }
         .shadow(color: .black.opacity(0.6), radius: 6)

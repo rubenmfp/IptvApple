@@ -85,6 +85,12 @@ struct PlayerView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var lastSave = Date.distantPast
     @State private var osd = ""          // message bref : « +10 s »
+    /// Appuis répétés sur avance / retour rapide : 10 s, puis 30 s, 1 min, 2 min, 5 min.
+    @State private var burst = SeekBurst()
+    /// Apple TV : déplacement sur la barre de lecture (position visée, en ms) ; OK pour y aller, Retour pour annuler.
+    @State private var scrubMs: Int?
+    @State private var scrubWasPlaying = false
+    @State private var scrubBurst = SeekBurst()
     @State private var osdTask: Task<Void, Never>?
     @FocusState private var focus: PlayerFocus?
     #if os(iOS)
@@ -153,10 +159,16 @@ struct PlayerView: View {
             if p == .background { saveProgress(); engine.suspend() }
             if p == .active { engine.resume() }
         }
-        .onChange(of: focus) { _, _ in if controls { scheduleHide() } }
+        .onChange(of: focus) { _, f in
+            if controls { scheduleHide() }
+            #if os(tvOS)
+            if f != .timeline && scrubMs != nil { cancelScrub() }
+            #endif
+        }
         #if os(tvOS)
         .onExitCommand {
-            if chanPanel { closeChannels() }
+            if scrubMs != nil { cancelScrub() }
+            else if chanPanel { closeChannels() }
             else if panel != nil { closePanel() }
             else if focus == .next { nextDismissed = true; focus = .surface }
             else if case .some(.reco) = focus { recoDismissed = true; focus = .surface }
@@ -262,16 +274,22 @@ struct PlayerView: View {
 
     @ViewBuilder private var timeline: some View {
         #if os(tvOS)
-        // barre sélectionnable : ◀ ▶ = −/+10 s, OK = pause, ▼ = boutons
-        Button { engine.togglePause(); showControls() } label: {
-            TimelineView(clock: engine.clock, focused: focus == .timeline, onScrub: nil)
+        // barre sélectionnable : ◀ ▶ = avance / retour rapide (de plus en plus loin si on insiste),
+        // OK = se déplacer sur la barre (◀ ▶ déplacent le repère, OK y va, Retour annule), ▼ = boutons
+        Button {
+            if let t = scrubMs { commitScrub(t) } else { startScrub() }
+        } label: {
+            TimelineView(clock: engine.clock, focused: focus == .timeline, preview: scrubMs,
+                         hint: req.live ? nil : (scrubMs == nil ? "◀ ▶ avance rapide · OK : se déplacer sur la barre"
+                                                                : "◀ ▶ déplacer · OK : aller ici · Retour : annuler"),
+                         onScrub: nil)
         }
         .buttonStyle(InvisibleButtonStyle())
         .focused($focus, equals: .timeline)
         .onMoveCommand { dir in
             switch dir {
-            case .left: seek(-10)
-            case .right: seek(10)
+            case .left: if scrubMs != nil { moveScrub(-1) } else { seek(-10) }
+            case .right: if scrubMs != nil { moveScrub(1) } else { seek(10) }
             default: break
             }
         }
@@ -585,11 +603,57 @@ struct PlayerView: View {
         if Date().timeIntervalSince(lastSave) > 10 { lastSave = Date(); saveProgress() }
     }
 
+    /// Avance ou retour rapide. Des appuis rapprochés (moins de 1,2 s) vont de plus en plus loin :
+    /// 10 s, 10 s, 30 s, 30 s, 1 min, 1 min, 2 min, 2 min, puis 5 min. Le message montre le saut total.
     private func seek(_ s: Int) {
         guard !req.live else { return }
-        engine.seek(by: s)
-        flash(s > 0 ? "+\(s) s" : "\(s) s")
+        let dir = s < 0 ? -1 : 1
+        let step = burst.next(dir: dir, steps: [10, 10, 30, 30, 60, 60, 120, 120, 300])
+        engine.seek(by: step * dir)
+        flash(fmtJump(burst.total) + (burst.count >= 2 ? "  ·  par \(fmtJump(step, signed: false))" : ""))
         if controls { scheduleHide() }
+    }
+
+    #if os(tvOS)
+    private func startScrub() {
+        guard !req.live, engine.durationMs > 0 else { engine.togglePause(); showControls(); return }
+        scrubWasPlaying = !engine.isPaused
+        engine.pause()
+        scrubMs = engine.timeMs
+        scrubBurst = SeekBurst()
+        hideTask?.cancel()
+    }
+
+    /// Repère : pas de 1 % de la durée (au moins 10 s), plus grand si on insiste.
+    private func moveScrub(_ dir: Int) {
+        guard let t = scrubMs else { return }
+        let base = max(10_000, engine.durationMs / 100)
+        let mult = scrubBurst.next(dir: dir, steps: [1, 1, 2, 2, 3, 5, 5, 8])
+        scrubMs = min(max(0, t + dir * base * mult), max(0, engine.durationMs - 2000))
+    }
+
+    private func commitScrub(_ t: Int) {
+        engine.seek(toMs: t)
+        scrubMs = nil
+        if scrubWasPlaying { engine.play() }
+        showControls()
+    }
+
+    private func cancelScrub() {
+        scrubMs = nil
+        if scrubWasPlaying { engine.play() }
+        scheduleHide()
+    }
+    #else
+    private func cancelScrub() { scrubMs = nil }
+    #endif
+
+    /// « +45 s », « +1 min 30 », « −3 min ».
+    private func fmtJump(_ s: Int, signed: Bool = true) -> String {
+        let a = abs(s)
+        let sign = signed ? (s < 0 ? "−" : "+") : ""
+        if a < 60 { return "\(sign)\(a) s" }
+        return a % 60 == 0 ? "\(sign)\(a / 60) min" : "\(sign)\(a / 60) min \(String(format: "%02d", a % 60))"
     }
 
     private func flash(_ text: String) {
@@ -939,24 +1003,48 @@ struct ClockView: View {
 struct TimelineView: View {
     @ObservedObject var clock: PlaybackClock
     let focused: Bool
+    /// Position visée (Apple TV, déplacement sur la barre), en ms.
+    var preview: Int? = nil
+    /// Aide affichée sous la barre quand elle est sélectionnée (Apple TV).
+    var hint: String? = nil
     /// (fraction, terminé)
     var onScrub: ((Double, Bool) -> Void)?
     @State private var drag: Double?
 
     var body: some View {
         let dur = max(clock.durationMs, 1)
-        let frac = drag ?? (clock.durationMs > 0 ? Double(clock.timeMs) / Double(dur) : 0)
+        let now = clock.durationMs > 0 ? Double(clock.timeMs) / Double(dur) : 0
+        let target: Double? = drag ?? preview.map { Double($0) / Double(dur) }
+        let frac = target ?? now
         let shown = Int(Double(dur) * frac)
-        let h: CGFloat = Theme.tv ? (focused ? 14 : 8) : 5
+        let active = target != nil
+        let h: CGFloat = Theme.tv ? (focused ? 14 : 8) : (active ? 9 : 5)
         return VStack(spacing: Theme.tv ? 10 : 4) {
             GeometryReader { g in
                 let bar = ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.3)).frame(height: h)
+                    // position actuelle (pâle) pendant qu'on vise ailleurs
+                    if active { Capsule().fill(.white.opacity(0.45)).frame(width: max(h, g.size.width * now), height: h) }
                     Capsule().fill(Theme.accent).frame(width: max(h, g.size.width * frac), height: h)
                     if focused || onScrub != nil {
                         Circle().fill(.white)
-                            .frame(width: Theme.tv ? 26 : 16, height: Theme.tv ? 26 : 16)
-                            .offset(x: g.size.width * frac - (Theme.tv ? 13 : 8))
+                            .frame(width: Theme.tv ? (active ? 34 : 26) : (active ? 22 : 16), height: Theme.tv ? (active ? 34 : 26) : (active ? 22 : 16))
+                            .shadow(color: .black.opacity(0.4), radius: 4)
+                            .offset(x: g.size.width * frac - (Theme.tv ? (active ? 17 : 13) : (active ? 11 : 8)))
+                    }
+                    if active {
+                        // bulle : position visée et écart avec la position actuelle
+                        let delta = shown - clock.timeMs
+                        VStack(spacing: 2) {
+                            Text(fmtTime(shown)).font(Theme.tv ? .title3.weight(.bold) : .subheadline.weight(.bold)).monospacedDigit()
+                            Text((delta >= 0 ? "+" : "−") + fmtTime(abs(delta))).font(Theme.tv ? .caption : .caption2).monospacedDigit().opacity(0.8)
+                        }
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, Theme.tv ? 16 : 10).padding(.vertical, Theme.tv ? 8 : 5)
+                        .background(RoundedRectangle(cornerRadius: Theme.tv ? 12 : 8).fill(.white))
+                        .fixedSize()
+                        .position(x: min(max(g.size.width * frac, Theme.tv ? 80 : 44), g.size.width - (Theme.tv ? 80 : 44)),
+                                  y: Theme.tv ? -46 : -30)
                     }
                 }
                 .frame(maxHeight: .infinity)
@@ -977,15 +1065,18 @@ struct TimelineView: View {
                 bar
                 #endif
             }
-            .frame(height: Theme.tv ? 30 : 28)
+            .frame(height: Theme.tv ? 30 : 34)
             HStack {
                 Text(fmtTime(shown))
+                Spacer()
+                if focused, let h = hint { Text(h).font(.caption).foregroundStyle(Theme.dim) }
                 Spacer()
                 Text("-" + fmtTime(max(0, clock.durationMs - shown)))
             }
             .font(Theme.tv ? .callout : .caption).monospacedDigit().foregroundStyle(.white)
         }
         .opacity(clock.durationMs > 0 ? 1 : 0.4)
+        .animation(.easeOut(duration: 0.12), value: active)
     }
 }
 
@@ -1212,5 +1303,23 @@ struct ChannelPanel: View {
         #if os(iOS)
         .buttonStyle(.plain)
         #endif
+    }
+}
+
+/// Suite d'appuis rapprochés dans un même sens : chaque appui va plus loin que le précédent.
+struct SeekBurst {
+    var dir = 0
+    var count = 0
+    var total = 0
+    var last = Date.distantPast
+
+    /// Valeur du nouvel appui (pris dans `steps`, de plus en plus grand), et mise à jour du total.
+    mutating func next(dir d: Int, steps: [Int]) -> Int {
+        let now = Date()
+        if d == dir && now.timeIntervalSince(last) < 1.2 { count += 1 } else { dir = d; count = 0; total = 0 }
+        last = now
+        let v = steps[min(count, steps.count - 1)]
+        total += v * d
+        return v
     }
 }
